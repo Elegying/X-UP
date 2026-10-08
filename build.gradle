@@ -1,0 +1,44 @@
+plugins { id 'com.android.application' version '9.0.1' }
+android {
+    namespace 'io.github.jared.xlowerseek'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'io.github.jared.xlowerseek'
+        minSdk 30
+        targetSdk 36
+        versionCode 20
+        versionName '1.8.0-beta1'
+        externalNativeBuild { cmake { arguments '-DANDROID_STL=c++_shared' } }
+        ndk { abiFilters 'arm64-v8a', 'x86_64' }
+    }
+    ndkVersion "28.2.13676358"
+    externalNativeBuild { cmake { path file("native/CMakeLists.txt"); version "3.22.1" } }
+    buildFeatures { buildConfig true }
+    sourceSets {
+        test { java.srcDirs = ["unit-tests"] }
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+            java.srcDirs = ['src']
+            res.srcDirs = ['res']
+            resources.srcDirs = ['resources']
+            assets.srcDirs = ['assets']
+        }
+    }
+    signingConfigs {
+        local {
+            storeFile file(System.getenv('SIGNING_KEYSTORE') ?: '../../work/xlowerseek-signing.p12')
+            storePassword 'android'
+            keyAlias 'xlowerseek'
+            keyPassword 'android'
+        }
+    }
+    buildTypes { release { signingConfig signingConfigs.local; minifyEnabled false } }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_11; targetCompatibility JavaVersion.VERSION_11 }
+    packaging { resources { excludes += ['META-INF/DEPENDENCIES', 'META-INF/LICENSE', 'META-INF/NOTICE'] } }
+}
+dependencies {
+    testImplementation "junit:junit:4.13.2"
+    testImplementation "org.json:json:20240303"
+    compileOnly files('libs/libxposed-api-102.jar')
+    implementation files('libs/libxposed-service-102.jar', 'libs/libxposed-interface-102.jar')
+}

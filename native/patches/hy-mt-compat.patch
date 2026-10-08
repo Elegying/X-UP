@@ -1,0 +1,47 @@
+--- a/ggml/src/gguf.cpp
++++ b/ggml/src/gguf.cpp
+@@ -700,6 +700,23 @@
+         // tensor type
+         {
+             ok = ok && gr.read(info.t.type);
++#ifdef XUP_LEGACY_STQ_MODEL
++            // Tencent's pinned 461860704-byte release predates Q2_0 taking id 42.
++            // It uses id 42 for STQ; preserve the original publisher checksummed file.
++            const auto arch_key = gguf_find_key(ctx, "general.architecture");
++            const auto file_key = gguf_find_key(ctx, "general.file_type");
++            const auto name_key = gguf_find_key(ctx, "general.name");
++            if (ok && info.t.type == GGML_TYPE_Q2_0 && arch_key >= 0 && file_key >= 0
++                    && gguf_get_kv_type(ctx, arch_key) == GGUF_TYPE_STRING
++                    && gguf_get_kv_type(ctx, file_key) == GGUF_TYPE_UINT32
++                    && std::string(gguf_get_val_str(ctx, arch_key)) == "hunyuan-dense"
++                    && gguf_get_val_u32(ctx, file_key) == 41
++                    && name_key >= 0 && gguf_get_kv_type(ctx, name_key) == GGUF_TYPE_STRING
++                    && std::string(gguf_get_val_str(ctx, name_key)) == "MT1.5 Sherry Stride16") {
++                info.t.type = GGML_TYPE_STQ1_0;
++            }
++#endif
++
+ 
+             // check that tensor type is within defined range
+             if (info.t.type < 0 || info.t.type >= GGML_TYPE_COUNT) {
+--- a/ggml/src/ggml-cpu/arch/arm/quants.c
++++ b/ggml/src/ggml-cpu/arch/arm/quants.c
+@@ -1682,7 +1682,18 @@
+ #endif
+ }
+ 
++#ifdef XUP_STQ_RUNTIME_DOTPROD
++extern int xup_stq_has_dotprod(void);
++extern void xup_vec_dot_stq1_dotprod(int, float *, size_t, const void *, size_t, const void *, size_t, int);
++#endif
+ void ggml_vec_dot_stq1_0_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
++#ifdef XUP_STQ_RUNTIME_DOTPROD
++    if (xup_stq_has_dotprod()) {
++        xup_vec_dot_stq1_dotprod(n, s, bs, vx, bx, vy, by, nrc);
++        return;
++    }
++#endif
++
+     assert(nrc == 1);
+     UNUSED(nrc);
+     UNUSED(bx);

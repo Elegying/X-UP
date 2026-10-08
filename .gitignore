@@ -1,0 +1,15 @@
+/.gradle/
+/.cxx/
+/build/
+/local.properties
+/native/vendor/
+*.apk
+*.gguf
+*.p12
+*.jks
+*.keystore
+.DS_Store
+/*.md
+!/README.md
+!/CHANGELOG.md
+!/THIRD_PARTY_NOTICES.md
