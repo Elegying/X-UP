@@ -42,7 +42,7 @@ final class SettingsUi {
     Switch toggle(LinearLayout card,String title,String description){
         LinearLayout row=new LinearLayout(activity);row.setGravity(Gravity.CENTER_VERTICAL);row.setPadding(0,dp(10),0,dp(10));card.addView(row);
         LinearLayout labels=new LinearLayout(activity);labels.setOrientation(LinearLayout.VERTICAL);row.addView(labels,new LinearLayout.LayoutParams(0,-2,1));text(labels,title,16,ink);TextView d=text(labels,description,13,muted);d.setPadding(0,dp(4),dp(12),0);
-        Switch control=new Switch(activity);control.setContentDescription(title);control.setMinHeight(dp(48));control.setMinWidth(dp(52));row.addView(control);row.setOnClickListener(v->control.setChecked(!control.isChecked()));return control;
+        Switch control=new Switch(activity);control.setContentDescription(title);control.setMinHeight(dp(48));control.setMinWidth(dp(52));row.addView(control);row.setOnClickListener(v->{if(control.isEnabled())control.setChecked(!control.isChecked());});return control;
     }
     Button button(LinearLayout card,String title,boolean primary){
         Button b=new Button(activity);b.setText(title);b.setTextSize(15);b.setAllCaps(false);b.setMinHeight(dp(50));b.setTextColor(primary?Color.WHITE:accent);

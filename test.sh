@@ -21,3 +21,7 @@ java -cp "$TEMP_TEST:$CP" io.github.jared.xlowerseek.ReflectTest
 mkdir -p "$TEMP_TEST/client"
 javac -encoding UTF-8 -d "$TEMP_TEST/client" $(find tests/client-stubs -name '*.java') src/io/github/jared/xlowerseek/{LocalTranslationClient,ResultReceiverTransport,PostTranslationPolicy,Feature}.java tests/client/*.java
 java -cp "$TEMP_TEST/client" io.github.jared.xlowerseek.LocalTranslationClientTest
+
+mkdir -p "$TEMP_TEST/service"
+javac -encoding UTF-8 -d "$TEMP_TEST/service" $(find tests/client-stubs/android -name '*.java') $(find tests/service-stubs -name '*.java') src/io/github/jared/xlowerseek/{LocalTranslationService,LocalEngine,OfflineEngine,TranslationCancellation,TranslationOutput,Feature}.java tests/service/*.java
+java -cp "$TEMP_TEST/service" io.github.jared.xlowerseek.LocalTranslationServiceTest

@@ -2,63 +2,64 @@ package io.github.jared.xlowerseek;
 import android.app.Activity;import android.content.Intent;import android.os.*;import android.widget.*;
 public final class LocalModelActivity extends Activity {
  private final java.util.Map<Feature,Switch> switches=new java.util.EnumMap<>(Feature.class);
- private TextView status,tests;private ProgressBar progress;private Button download,pause,test;private final Handler main=new Handler(Looper.getMainLooper());private boolean binding,testing;
+ private final java.util.Map<LocalEngine,TextView> engineStates=new java.util.EnumMap<>(LocalEngine.class);
+ private ImageView googleBadge;private TextView status,tests,modelInfo;private ProgressBar progress;private Button download,pause,test;private RadioGroup engines;
+ private final Handler main=new Handler(Looper.getMainLooper());private boolean binding,testing;private String testId;
  private final Runnable refresh=()->{refresh();main.postDelayed(this.refresh,500);};
  public void onCreate(Bundle state){
-  super.onCreate(state);SettingsUi ui=new SettingsUi(this,"翻译方式","腾讯本地翻译为主，X 原生翻译备用",true);
+  super.onCreate(state);SettingsUi ui=new SettingsUi(this,"翻译方式","按手机性能选择，已下载模型会保留",true);
   LinearLayout modes=ui.section("功能");
   for(Feature f:new Feature[]{Feature.LOCAL_TEXT,Feature.NATIVE_TRANSLATE,Feature.LOCAL_CONTEXT}){
-   Switch control=ui.toggle(modes,f.title,f.description);switches.put(f,control);control.setChecked(SettingsStore.feature(this,f));control.setOnCheckedChangeListener((v,on)->{
-    if(binding)return;
-    if(!SettingsStore.setFeature(this,f,on)){bindModes();status.setText("保存失败，请重试。");return;}
-    bindModes();
-    if((f==Feature.NATIVE_TRANSLATE&&!on||f==Feature.LOCAL_TEXT&&on)&&!ModelFiles.ready(this)){
-     new android.app.AlertDialog.Builder(this).setTitle("下载本地翻译模型").setMessage("已切换到腾讯本地翻译。首次使用需要下载约 462 MB 模型；完成前保留原文。英语、日语共用一份模型。").setPositiveButton("下载模型",(dialog,which)->startDownload()).setNegativeButton("稍后",null).show();
-    }
+   Switch control=ui.toggle(modes,f.title,f.description);switches.put(f,control);control.setOnCheckedChangeListener((v,on)->{
+    if(binding)return;if(!SettingsStore.setFeature(this,f,on)){bindModes();status.setText("保存失败，请重试。");return;}bindModes();
+    if((f==Feature.NATIVE_TRANSLATE&&!on||f==Feature.LOCAL_TEXT&&on)&&!LocalModels.ready(this,SettingsStore.engine(this)))promptDownload();
    });
   }
-  LinearLayout model=ui.section("翻译模型");ui.info(model,LocalModelSpec.NAME,"462 MB · 下载后无需联网 · 权重不包含在安装包内");
-  status=ui.status(model,"");progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);progress.setMax(100);model.addView(progress);
-  download=ui.button(model,"下载模型 · 462 MB",true);pause=ui.button(model,"暂停下载",false);
-  download.setOnClickListener(v->startDownload());
+  LinearLayout choose=ui.section("本地引擎");engines=new RadioGroup(this);choose.addView(engines);
+  for(LocalEngine engine:LocalEngine.values()){
+   RadioButton radio=new RadioButton(this);radio.setId(100+engine.ordinal());radio.setText(engine.title);radio.setTextColor(ui.ink);radio.setMinHeight(ui.dp(48));engines.addView(radio);
+   engineStates.put(engine,radio);
+  }
+  engines.setOnCheckedChangeListener((group,id)->{if(binding||id<100||id>=100+LocalEngine.values().length)return;LocalEngine selected=LocalEngine.values()[id-100];if(!SettingsStore.setEngine(this,selected)){bindModes();return;}cancelTest();refresh();if(SettingsStore.feature(this,Feature.LOCAL_TEXT)&&!LocalModels.ready(this,selected))promptDownload();});
+  LinearLayout model=ui.section("模型下载");modelInfo=ui.status(model,"");status=ui.status(model,"");progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);progress.setMax(100);model.addView(progress);
+  download=ui.button(model,"下载所选模型",true);pause=ui.button(model,"暂停下载",false);download.setOnClickListener(v->startDownload());
   pause.setOnClickListener(v->{startService(new Intent(this,ModelDownloadService.class).setAction("pause"));status.setText("正在暂停，已下载部分会保留。");});
-  LinearLayout check=ui.section("检查");tests=ui.status(check,"模型会参考同一帖子已加载的上级回复与引用，整段翻译。");test=ui.button(check,"测试英语与日语",true);test.setOnClickListener(v->test());
-  ui.button(check,"重试未完成翻译",false).setOnClickListener(v->tests.setText(SettingsStore.retryTranslations(this)?"已通知 X 重试未完成内容。":"设置服务未连接，请先启用模块。"));
-  ui.navigation(ui.section("说明"),"模型来源与使用说明","",()->ui.details("本地翻译说明","模型由腾讯发布，支持英语、日语等语言翻译为中文，以及上下文翻译。\n\n下载需联网，可暂停并续传；只有大小与 SHA-256 校验通过才启用。模型文件约 462 MB，小于 500 MB；实际运行内存会大于文件体积。\n\n默认使用腾讯本地翻译，帖子和私信文字在手机上处理。手动切换到 X 原生备用模式后，将使用 X 的在线翻译服务。速度取决于手机和文本长度，不保证所有内容在 2 秒内完成。输入框、图片不处理，特殊自绘内容可能保留原文。\n\n模型遵循 Apache-2.0 许可证；推理内核 llama.cpp 为 MIT 许可。"));
-  ui.navigation(ui.body,"第三方许可","",()->{try{java.io.InputStream in=getAssets().open("licenses/NOTICE.txt");java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream();byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1)out.write(b,0,n);in.close();ui.details("第三方许可",out.toString("UTF-8"));}catch(java.io.IOException e){ui.details("第三方许可","请查看项目 licenses 目录。");}});
-  ui.navigation(ui.body,"模型官方页面","",()->startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(LocalModelSpec.PAGE))));
- }
- protected void onResume(){super.onResume();main.post(refresh);}protected void onPause(){main.removeCallbacks(refresh);super.onPause();}
- private void startDownload(){
-  long remaining=Math.max(0,LocalModelSpec.BYTES-ModelFiles.partial(this));
-  android.net.ConnectivityManager network=getSystemService(android.net.ConnectivityManager.class);
-  android.net.NetworkCapabilities caps=network==null?null:network.getNetworkCapabilities(network.getActiveNetwork());
-  boolean cellular=caps!=null&&caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR);
-  if(remaining>0&&network!=null&&(cellular||network.isActiveNetworkMetered())){
-   new android.app.AlertDialog.Builder(this).setTitle("使用流量下载？").setMessage(String.format(java.util.Locale.ROOT,"当前为移动数据或计费网络，模型还需下载约 %.1f MB。可以继续下载，也可以稍后连接 Wi-Fi。",remaining/1000000.0)).setPositiveButton("继续下载",(dialog,which)->beginDownload()).setNegativeButton("取消",null).show();
-   return;
-  }
-  beginDownload();
- }
- private void beginDownload(){try{startForegroundService(new Intent(this,ModelDownloadService.class));refresh();}catch(RuntimeException e){status.setText("无法启动下载，请重新打开页面重试。");}}
- private void bindModes(){binding=true;for(java.util.Map.Entry<Feature,Switch> e:switches.entrySet())e.getValue().setChecked(SettingsStore.feature(this,e.getKey()));Switch context=switches.get(Feature.LOCAL_CONTEXT);context.setEnabled(SettingsStore.feature(this,Feature.LOCAL_TEXT));binding=false;}
- private void refresh(){
+  LinearLayout check=ui.section("测试");googleBadge=new ImageView(this);try(java.io.InputStream badge=getAssets().open("branding/google-translate.png")){googleBadge.setImageBitmap(android.graphics.BitmapFactory.decodeStream(badge));}catch(java.io.IOException ignored){}googleBadge.setAdjustViewBounds(true);googleBadge.setContentDescription("由 Google Translate 自动翻译");check.addView(googleBadge,new LinearLayout.LayoutParams(ui.dp(172),ui.dp(28)));tests=ui.status(check,"测试当前引擎的英语、日语译文与实际等待时间。");test=ui.button(check,"测试英语与日语",true);test.setOnClickListener(v->test());
+  ui.button(check,"重试未完成翻译",false).setOnClickListener(v->tests.setText(SettingsStore.retryTranslations(this)?"已通知 X 重试。":"设置服务未连接，请先启用模块。"));
+  ui.navigation(ui.section("说明"),"模型与升级说明","",()->ui.details("模型与升级说明","腾讯：支持上级回复和引用上下文，性能要求较高。\n\nGoogle ML Kit：语言包约每个 30 MB，实际由 Google 决定；日译中经英语中转。\n\nOPUS-MT：INT8 英日模型包约 136 MB，英语直接译中文，日语先译英语再译中文。适合日常短句，俚语、反讽和省略句可能失真。\n\n只有腾讯引擎使用帖子上下文。另两种引擎按句翻译，保护链接、账号与原排版。\n\n模型均需在线下载，下载完成后正文在本机处理。Google 模型下载需要能连接 Google 下载服务，SDK 不提供精确进度与暂停。腾讯和 OPUS 支持暂停续传。\n\nX 在前台时异步预热所选引擎；进入后台停止翻译，模型保留 2 分钟后释放。两分钟内返回直接复用，下载文件不会删除。\n\n正常覆盖安装保留已下载模型；切换引擎不会删除其他模型。卸载或清除应用数据会移除模型。\n\n三个本地引擎与 X 原生联网翻译互斥，不会自动联网发送正文。"));
+  ui.navigation(ui.body,"Google Translate 使用说明","",()->ui.details("Google Translate","选择 Google ML Kit 时，离线译文由 Google Translate 提供。自动翻译可能存在错误，Google 不对译文的准确性、可靠性或适用性作保证。\n\nhttps://cloud.google.com/translate\nhttps://developers.google.com/ml-kit/language/translation"));
+  ui.navigation(ui.body,"第三方许可","",()->{try(java.io.InputStream in=getAssets().open("licenses/NOTICE.txt")){java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream();byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1)out.write(b,0,n);ui.details("第三方许可",out.toString("UTF-8"));}catch(java.io.IOException e){ui.details("第三方许可","请查看项目 licenses 目录。");}});
   bindModes();
-  boolean running=ModelDownloadService.running,ready=ModelFiles.ready(this);long bytes=running?ModelDownloadService.received:ready?LocalModelSpec.BYTES:ModelFiles.partial(this);
-  progress.setIndeterminate(running&&ModelDownloadService.verifying);progress.setProgress((int)(bytes*100/LocalModelSpec.BYTES));
-  status.setText(running?ModelDownloadService.status:ready?"模型文件已就绪 · 可测试本地翻译":ModelDownloadService.status.isEmpty()?"本地模型尚未下载 · 下载完成前保留原文":ModelDownloadService.status);
-  download.setEnabled(!running&&!ready);download.setText(ready?"模型已下载":bytes>0?"继续下载模型":"下载模型 · 462 MB");pause.setEnabled(running);test.setEnabled(ready&&!testing&&SettingsStore.feature(this,Feature.LOCAL_TEXT));
  }
- private void test(){
-  testing=true;test.setEnabled(false);tests.setText("正在本地测试，首次加载模型可能较慢…");
-  android.content.Context app=getApplicationContext();java.lang.ref.WeakReference<LocalModelActivity> screen=new java.lang.ref.WeakReference<>(this);StringBuilder results=new StringBuilder();
-  String[] samples={"The launch made the impossible look routine.","今日は雨なので、傘を忘れないでください。"};int[] remaining={2};
-  for(int i=0;i<samples.length;i++){
-   final String label=i==0?"英语":"日语";long start=SystemClock.elapsedRealtime();
-   LocalTranslationService.request(app,samples[i],"",new ResultReceiver(main){protected void onReceiveResult(int code,Bundle data){
-    results.append(label).append("：").append(code==0?data.getString("text"):"未完成，请检查本地翻译开关与模型状态").append("\n耗时 ").append(SystemClock.elapsedRealtime()-start).append(" 毫秒\n\n");
-    LocalModelActivity a=screen.get();if(a==null||a.isDestroyed())return;a.tests.setText(results.toString());if(--remaining[0]==0){a.testing=false;a.refresh();}
-   }});
-  }
+ protected void onResume(){super.onResume();MlKitModels.refresh(this);main.post(refresh);}protected void onPause(){main.removeCallbacks(refresh);super.onPause();}
+ protected void onDestroy(){cancelTest();super.onDestroy();}
+ private void promptDownload(){new android.app.AlertDialog.Builder(this).setTitle("下载所选模型").setMessage("当前选择 "+SettingsStore.engine(this).title+"。下载完成前保留原文；已经下载的其他模型会继续保留。").setPositiveButton("下载",(d,w)->startDownload()).setNegativeButton("稍后",null).show();}
+ private void startDownload(){
+  LocalEngine engine=SettingsStore.engine(this);if(LocalModels.ready(this,engine)||ModelDownloadService.running)return;
+  android.net.ConnectivityManager network=getSystemService(android.net.ConnectivityManager.class);android.net.NetworkCapabilities caps=network==null?null:network.getNetworkCapabilities(network.getActiveNetwork());
+  boolean metered=network!=null&&(network.isActiveNetworkMetered()||caps!=null&&caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR));
+  if(metered){String size=engine==LocalEngine.MLKIT?"中文、日语语言包每个约 30 MB，以 Google 实际下载为准":engine==LocalEngine.OPUS?"完整模型包约 136 MB":"完整模型约 462 MB";
+   new android.app.AlertDialog.Builder(this).setTitle("使用流量下载？").setMessage("当前为移动数据或计费网络。"+size+"。已有有效进度会复用；校验失败或服务器不支持续传时可能重新下载。").setPositiveButton("继续下载",(d,w)->beginDownload(engine)).setNegativeButton("取消",null).show();return;}
+  beginDownload(engine);
+ }
+ private void beginDownload(LocalEngine engine){try{startForegroundService(new Intent(this,ModelDownloadService.class).putExtra("engine",engine.id));refresh();}catch(RuntimeException e){status.setText("无法启动下载，请重新打开页面重试。");}}
+ private void bindModes(){binding=true;LocalEngine engine=SettingsStore.engine(this);for(java.util.Map.Entry<Feature,Switch> e:switches.entrySet())e.getValue().setChecked(SettingsStore.feature(this,e.getKey()));switches.get(Feature.LOCAL_CONTEXT).setEnabled(SettingsStore.feature(this,Feature.LOCAL_TEXT)&&engine==LocalEngine.TENCENT);engines.check(100+engine.ordinal());binding=false;}
+ private void refresh(){
+  bindModes();LocalEngine engine=SettingsStore.engine(this);boolean ready=LocalModels.ready(this,engine),running=ModelDownloadService.running,same=running&&ModelDownloadService.downloadingEngine==engine;
+  for(LocalEngine e:LocalEngine.values())engineStates.get(e).setText(e.title+" · "+(LocalModels.ready(this,e)?"已下载":"未就绪")+"\n"+e.description);
+  googleBadge.setVisibility(engine==LocalEngine.MLKIT?android.view.View.VISIBLE:android.view.View.GONE);test.setText(engine==LocalEngine.MLKIT?"使用 Google Translate 测试英语与日语":"测试英语与日语");
+  modelInfo.setText(engine.description+(engine==LocalEngine.TENCENT?"\n可开启帖子上下文":"\n当前引擎按句翻译，不使用上下文提示词"));
+  progress.setIndeterminate(same&&(ModelDownloadService.verifying||engine==LocalEngine.MLKIT));progress.setProgress(ready?100:same&&ModelDownloadService.total>0?(int)Math.min(100,ModelDownloadService.received*100/ModelDownloadService.total):0);
+  status.setText(same?engine==LocalEngine.MLKIT?MlKitModels.status:ModelDownloadService.status:ready?"模型已就绪 · 可离线使用":running?"正在下载 "+ModelDownloadService.downloadingEngine.title:engine==LocalEngine.MLKIT?MlKitModels.status:ModelDownloadService.downloadingEngine==engine&&!ModelDownloadService.status.isEmpty()?ModelDownloadService.status:"尚未下载，完成前保留原文");
+  download.setEnabled(!running&&!ready);download.setText(ready?"模型已下载，无需重复下载":"下载所选模型");pause.setEnabled(same&&engine!=LocalEngine.MLKIT);test.setEnabled(ready&&!testing&&SettingsStore.translate(this)&&SettingsStore.feature(this,Feature.LOCAL_TEXT));
+ }
+ private void cancelTest(){if(testId!=null){LocalTranslationService.cancel(android.os.Process.myUid(),testId);testId=null;}testing=false;}
+ private void test(){testing=true;test.setEnabled(false);tests.setText("正在测试，首次加载可能较慢…");sample(0,new StringBuilder(),SettingsStore.engine(this));}
+ private void sample(int index,StringBuilder results,LocalEngine engine){
+  if(index==2||isDestroyed()||engine!=SettingsStore.engine(this)){testing=false;testId=null;refresh();return;}
+  String[] texts={"The launch made the impossible look routine.","今日は雨なので、傘を忘れないでください。"};String id=java.util.UUID.randomUUID().toString();testId=id;long started=SystemClock.elapsedRealtime();
+  LocalTranslationService.request(getApplicationContext(),android.os.Process.myUid(),id,engine.id,LocalModels.revision(this),texts[index],"",new ResultReceiver(main){protected void onReceiveResult(int code,Bundle data){
+   if(isDestroyed()||!id.equals(testId))return;results.append(index==0?"英语：":"日语：").append(code==0&&data!=null?data.getString("text"):"未完成，请检查模型与翻译开关").append("\n等待 ").append(SystemClock.elapsedRealtime()-started).append(" 毫秒\n\n");tests.setText(results.toString());sample(index+1,results,engine);
+  }});
  }
 }

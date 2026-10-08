@@ -1,0 +1,69 @@
+{
+  "name": "X-UP OPUS-MT offline bundle v1",
+  "conversion": "CTranslate2 4.8.1 INT8; Transformers 4.57.6; SentencePiece 0.2.1",
+  "license": "Apache-2.0",
+  "models": [
+    {
+      "repository": "https://huggingface.co/Helsinki-NLP/opus-mt-en-zh",
+      "revision": "408d9bc410a388e1d9aef112a2daba955b945255"
+    },
+    {
+      "repository": "https://huggingface.co/Helsinki-NLP/opus-mt-ja-en",
+      "revision": "0770961a39ba6bd66305b149c3f4110bcafca2e6"
+    }
+  ],
+  "bytes": 135806124,
+  "sha256": "7362cbd5bbfa3a38bed1a1b97c34412636cb2da4dd62d1e95335068443d4194a",
+  "entries": [
+    {
+      "path": "en-zh/config.json",
+      "size": 223,
+      "sha256": "8f6496adfc930cbfecbe8281112197705c488fab47d34b4829b06d7f478909af"
+    },
+    {
+      "path": "en-zh/model.bin",
+      "size": 79567635,
+      "sha256": "327584c20bb83c7e89d595bcfa30b6ef3771c10816f707e892c4bbb1f808a8fb"
+    },
+    {
+      "path": "en-zh/shared_vocabulary.json",
+      "size": 1303887,
+      "sha256": "37314a6abb25ed8f8497498aeeb31fcea98de892bf00ff7c2e8c966b26fe0b82"
+    },
+    {
+      "path": "en-zh/source.spm",
+      "size": 806435,
+      "sha256": "5775ddc9e3ff2fae91554da56468ad35ff56edaba870fea74447bc7234bfdaa8"
+    },
+    {
+      "path": "en-zh/target.spm",
+      "size": 804600,
+      "sha256": "81dc94efa84e4025ef38d25d5d07429fe41e3eb29d44003f1db6fe98487b0052"
+    },
+    {
+      "path": "ja-en/config.json",
+      "size": 223,
+      "sha256": "8f6496adfc930cbfecbe8281112197705c488fab47d34b4829b06d7f478909af"
+    },
+    {
+      "path": "ja-en/model.bin",
+      "size": 77339435,
+      "sha256": "94ea549b9aaca8b4899d8406f8323c1c558874534ba629659af9874c63bbdf63"
+    },
+    {
+      "path": "ja-en/shared_vocabulary.json",
+      "size": 1208862,
+      "sha256": "c6e7f9988e5fe15c59ed331ce2d7c3dd551e70add8efc09f839f5a48168da4d6"
+    },
+    {
+      "path": "ja-en/source.spm",
+      "size": 781853,
+      "sha256": "d0b5c3b10b5959f056ff2c86e2f2356129242ff1fc72d3a4a34d6a8c0eee4e57"
+    },
+    {
+      "path": "ja-en/target.spm",
+      "size": 801883,
+      "sha256": "35d89c704e270d441fade716a3931d49c43179400682edcca7f180694982a2f6"
+    }
+  ]
+}

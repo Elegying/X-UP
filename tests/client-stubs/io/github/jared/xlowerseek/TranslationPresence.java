@@ -1,0 +1,1 @@
+package io.github.jared.xlowerseek; final class TranslationPresence implements AutoCloseable {TranslationPresence(android.content.Context c,String id){} void setVisible(boolean value){} public void close(){}}

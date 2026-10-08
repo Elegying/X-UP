@@ -49,7 +49,7 @@ public final class SettingsStore {
     }
     static synchronized boolean isShared(){return remote!=null;}
     static synchronized void observe(Runnable callback){observer=callback;}
-    private static void changed(){Runnable callback=observer;if(callback!=null)main.post(callback);}
+    private static void changed(){main.post(()->LocalTranslationService.settingsChanged(application));Runnable callback=observer;if(callback!=null)main.post(callback);}
     private static SharedPreferences prefs(Context c){if(local==null)initialize(c.getApplicationContext());return local;}
     public static synchronized int seconds(Context c){return normalize(prefs(c).getInt(SECONDS,10));}
     public static int normalize(int seconds){return seconds==5?5:10;}
@@ -60,13 +60,19 @@ public final class SettingsStore {
     }
     static synchronized void publishModelState(Context context){
         prefs(context);
-        if(remote!=null)try{if(!remote.edit().remove("llm_enabled").remove("llm_other").remove("llm_revision").remove("fast_translation").remove("review_translation").putLong("local_revision",ModelFiles.revision(context)).commit())throw new IllegalStateException("Sync failed");}catch(RuntimeException ignored){remote=null;}
+        if(remote!=null)try{if(!remote.edit().remove("llm_enabled").remove("llm_other").remove("llm_revision").remove("fast_translation").remove("review_translation").putLong("local_revision",LocalModels.revision(context)).commit())throw new IllegalStateException("Sync failed");}catch(RuntimeException ignored){remote=null;}
         changed();
     }
     public static synchronized boolean feature(Context context,Feature feature){SharedPreferences p=prefs(context);if(feature==Feature.NATIVE_TRANSLATE||feature==Feature.LOCAL_TEXT)return TranslationMode.enabled(p.getInt(TranslationMode.KEY,TranslationMode.LOCAL),feature);return p.getBoolean(feature.key,true);}
+    static synchronized LocalEngine engine(Context c){return LocalEngine.parse(prefs(c).getString(LocalEngine.KEY,LocalEngine.TENCENT.id));}
+    static synchronized boolean setEngine(Context c,LocalEngine engine){
+        prefs(c);if(!local.edit().putString(LocalEngine.KEY,engine.id).putBoolean(DIRTY,true).commit())return false;
+        if(remote!=null)try{if(!copyFeatures(local,remote))throw new IllegalStateException();local.edit().putBoolean(DIRTY,false).commit();}catch(RuntimeException e){remote=null;}
+        changed();return true;
+    }
     private static boolean copyFeatures(SharedPreferences from,SharedPreferences to){
         int mode=TranslationMode.normalize(from.getInt(TranslationMode.KEY,TranslationMode.LOCAL));
-        SharedPreferences.Editor edit=to.edit().putInt(TranslationMode.KEY,mode);for(Feature f:Feature.values())edit.putBoolean(f.key,f==Feature.NATIVE_TRANSLATE||f==Feature.LOCAL_TEXT?TranslationMode.enabled(mode,f):from.getBoolean(f.key,true));return edit.commit();
+        SharedPreferences.Editor edit=to.edit().putInt(TranslationMode.KEY,mode).putString(LocalEngine.KEY,LocalEngine.parse(from.getString(LocalEngine.KEY,LocalEngine.TENCENT.id)).id);for(Feature f:Feature.values())edit.putBoolean(f.key,f==Feature.NATIVE_TRANSLATE||f==Feature.LOCAL_TEXT?TranslationMode.enabled(mode,f):from.getBoolean(f.key,true));return edit.commit();
     }
     static synchronized boolean setFeature(Context context,Feature feature,boolean enabled){
         prefs(context);SharedPreferences.Editor edit=local.edit().putBoolean(feature.key,enabled).putBoolean(DIRTY,true);

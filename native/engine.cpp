@@ -1,6 +1,7 @@
 #include "engine.h"
 #include "llama.h"
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <mutex>
 #include <stdexcept>
@@ -8,9 +9,10 @@
 #include <vector>
 struct TranslationEngine::Impl {
  llama_model *model=nullptr;llama_context *context=nullptr;
+ std::atomic<uint64_t> epoch{0};uint64_t active_ticket=0;
  std::chrono::steady_clock::time_point deadline;
  ~Impl(){if(context)llama_free(context);if(model)llama_model_free(model);}
- static bool expired(void *p){return std::chrono::steady_clock::now()>static_cast<Impl*>(p)->deadline;}
+ static bool expired(void *p){auto *state=static_cast<Impl*>(p);return state->epoch.load()!=state->active_ticket||std::chrono::steady_clock::now()>state->deadline;}
 };
 TranslationEngine::TranslationEngine(const std::string &path):impl(new Impl){
  static std::once_flag init;std::call_once(init,[]{
@@ -26,7 +28,11 @@ llama_backend_init();});
  llama_set_abort_callback(impl->context,Impl::expired,impl.get());
 }
 TranslationEngine::~TranslationEngine()=default;
-std::string TranslationEngine::translate(const std::string &prompt){
+uint64_t TranslationEngine::ticket() const{return impl->epoch.load();}
+void TranslationEngine::cancel(){impl->epoch.fetch_add(1);}
+std::string TranslationEngine::translate(const std::string &prompt){return translate(prompt,ticket());}
+std::string TranslationEngine::translate(const std::string &prompt,uint64_t ticket){
+ impl->active_ticket=ticket;if(impl->epoch.load()!=ticket)throw std::runtime_error("翻译已取消");
  auto *ctx=impl->context;auto *vocab=llama_model_get_vocab(impl->model);
  llama_memory_clear(llama_get_memory(ctx),true);impl->deadline=std::chrono::steady_clock::now()+std::chrono::seconds(25);
  // Use the exact single-user template shipped in the pinned HY-MT model.

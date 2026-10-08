@@ -28,7 +28,7 @@ public final class SettingsActivity extends Activity {
         LinearLayout reading=ui.section("阅读与翻译");
         latest=ui.toggle(reading,"最新回复优先","自动选最新回复，仍可手动切换。");
         ui.divider(reading);translate=ui.toggle(reading,"自动中文阅读","翻译总开关；图片文字不处理。");
-        ui.navigation(reading,"翻译方式与模型","本地模型为主，原生翻译备用。",()->startActivity(new Intent(this,LocalModelActivity.class)));
+        ui.navigation(reading,"翻译方式与模型","三个离线引擎可选，原生翻译备用。",()->startActivity(new Intent(this,LocalModelActivity.class)));
         LinearLayout module=ui.section("模块");status=ui.status(module,"");
         ui.navigation(module,"状态与帮助","适配版本、启用方法与功能边界。",()->startActivity(new Intent(this,ModuleStatusActivity.class)));
         ui.button(ui.body,"打开 X",true).setOnClickListener(v->{Intent launch=getPackageManager().getLaunchIntentForPackage("com.twitter.android");if(launch==null){status.setText("未安装 X");return;}startActivity(launch);});

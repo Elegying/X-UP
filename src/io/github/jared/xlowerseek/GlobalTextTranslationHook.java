@@ -11,6 +11,7 @@ import java.util.*;
 
 /** Local translation of display text. Input, URLs and interactive annotation ranges stay intact. */
 final class GlobalTextTranslationHook {
+    private final GoogleAttribution attribution=new GoogleAttribution();private WeakReference<Activity> currentActivity=new WeakReference<>(null);
     private final RemoteSettings settings;
     private final LocalTranslationClient client;
     private final Handler main=new Handler(Looper.getMainLooper());
@@ -25,6 +26,8 @@ final class GlobalTextTranslationHook {
     private int depth,resumed;
     private boolean replacing,enabled;
     private final Map<LocalTranslationClient.Listener,PostContextIndex.Binding> contextBindings=new WeakHashMap<>();
+    private String engine="";
+    private final Runnable visibilityTick=new Runnable(){public void run(){if(resumed>0){invalidate();main.postDelayed(()->client.pruneInvisible(),250);main.postDelayed(this,1000);}}};
     private long retry;private long revision=-1;private boolean localEnabled,contextEnabled;
     private GlobalTextTranslationHook(Application app,ClassLoader loader,RemoteSettings settings){
         this.settings=settings;enabled=settings.translate;client=new LocalTranslationClient(app,settings);
@@ -52,8 +55,8 @@ final class GlobalTextTranslationHook {
         }
         hook.textViews();
         app.registerActivityLifecycleCallbacks(new Application.ActivityLifecycleCallbacks(){
-            public void onActivityResumed(Activity a){hook.resumed++;hook.client.setForeground(true);hook.updateSettings();hook.invalidate();}
-            public void onActivityPaused(Activity a){hook.resumed=Math.max(0,hook.resumed-1);hook.client.setForeground(hook.resumed>0);hook.main.postDelayed(()->{if(hook.resumed==0){/* Keep in-flight work and successful memory cache across a brief app switch. */hook.invalidate();}},1000);}
+            public void onActivityResumed(Activity a){hook.resumed++;hook.currentActivity=new WeakReference<>(a);hook.client.setForeground(true);hook.updateSettings();hook.main.removeCallbacks(hook.visibilityTick);hook.main.post(hook.visibilityTick);hook.invalidate();}
+            public void onActivityPaused(Activity a){hook.attribution.clear();if(hook.currentActivity.get()==a)hook.currentActivity.clear();hook.resumed=Math.max(0,hook.resumed-1);hook.client.setForeground(hook.resumed>0);hook.main.postDelayed(()->{if(hook.resumed==0){hook.client.suspend();hook.main.removeCallbacks(hook.visibilityTick);}},1000);}
             public void onActivityCreated(Activity a,Bundle b){} public void onActivityStarted(Activity a){}
             public void onActivityStopped(Activity a){} public void onActivityDestroyed(Activity a){}
             public void onActivitySaveInstanceState(Activity a,Bundle b){}
@@ -67,11 +70,12 @@ final class GlobalTextTranslationHook {
     }
     private void updateSettings(){
         if(retry!=settings.retry){retry=settings.retry;client.retryFailures();invalidate();}
-        if(enabled==settings.translate&&revision==settings.localRevision&&localEnabled==settings.feature(Feature.LOCAL_TEXT)&&contextEnabled==settings.feature(Feature.LOCAL_CONTEXT))return;
-        enabled=settings.translate;revision=settings.localRevision;localEnabled=settings.feature(Feature.LOCAL_TEXT);contextEnabled=settings.feature(Feature.LOCAL_CONTEXT);
-        client.clear();contextBindings.clear();invalidate();
+        if(engine.equals(settings.engine)&&enabled==settings.translate&&revision==settings.localRevision&&localEnabled==settings.feature(Feature.LOCAL_TEXT)&&contextEnabled==settings.feature(Feature.LOCAL_CONTEXT))return;
+        engine=settings.engine;enabled=settings.translate;revision=settings.localRevision;localEnabled=settings.feature(Feature.LOCAL_TEXT);contextEnabled=settings.feature(Feature.LOCAL_CONTEXT);
+        client.clear();client.setForeground(resumed>0);contextBindings.clear();invalidate();
     }
     private void invalidate(){
+        attribution.update(currentActivity.get(),resumed>0&&settings.translate&&settings.feature(Feature.LOCAL_TEXT)&&settings.engine.equals("mlkit"));
         for(Observer observer:new ArrayList<>(observers.values()))observer.changed();
         for(WeakReference<ViewBinding> ref:new ArrayList<>(views.values())){ViewBinding binding=ref.get();if(binding!=null)binding.changed();}
     }
@@ -133,7 +137,7 @@ final class GlobalTextTranslationHook {
         WholeTextPlan plan=new WholeTextPlan(text,ranges);
         if(!settings.feature(Feature.LOCAL_TEXT)||!PostTranslationPolicy.eligible(null,text))return plan.decode(plan.encoded);
         PostContextIndex.Context context=contextBindings.computeIfAbsent(listener,k->new PostContextIndex.Binding()).resolve(PostContextHook.INDEX.forText(text));
-        return plan.decode(client.lookup(plan.encoded,settings.feature(Feature.LOCAL_CONTEXT)?context.text:"",listener));
+        return plan.decode(client.lookup(plan.encoded,settings.engine.equals("tencent")&&settings.feature(Feature.LOCAL_CONTEXT)?context.text:"",listener));
     }
 
     private void textViews(){

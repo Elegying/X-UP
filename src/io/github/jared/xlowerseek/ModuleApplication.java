@@ -5,6 +5,7 @@ public final class ModuleApplication extends android.app.Application {
         super.onCreate();
         LegacyTranslationCleanup.run(this);
         SettingsStore.initialize(this);
+        MlKitModels.refresh(this);
         // A scoped URI grant also makes this provider visible to the receiving app.
         try {
             grantUriPermission("com.twitter.android",

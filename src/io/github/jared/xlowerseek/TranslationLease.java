@@ -12,7 +12,6 @@ final class TranslationLease {
             public void onServiceDisconnected(ComponentName name){}
         };
         Intent intent=new Intent().setClassName("io.github.jared.xlowerseek","io.github.jared.xlowerseek.TranslationKeepAliveService");
-        try{context.startForegroundService(intent);}catch(RuntimeException unavailable){/* The provider lease remains a fallback. */}
         boolean bound;
         try{bound=context.bindService(intent,connection,Context.BIND_AUTO_CREATE|Context.BIND_IMPORTANT);}
         catch(RuntimeException e){bound=false;}

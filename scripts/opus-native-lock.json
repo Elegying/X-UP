@@ -1,0 +1,37 @@
+[
+  {
+    "path": "ctranslate2",
+    "revision": "0d8bcd362ac75ef860ef161d6f0efad0ae439ff0",
+    "url": "https://github.com/OpenNMT/CTranslate2.git"
+  },
+  {
+    "path": "ctranslate2/third_party/spdlog",
+    "revision": "76fb40d95455f249bd70824ecfcae7a8f0930fa3",
+    "url": "https://github.com/gabime/spdlog.git"
+  },
+  {
+    "path": "ctranslate2/third_party/cpu_features",
+    "revision": "8a494eb1e158ec2050e5f699a504fbc9b896a43b",
+    "url": "https://github.com/google/cpu_features.git"
+  },
+  {
+    "path": "ctranslate2/third_party/ruy",
+    "revision": "363f252289fb7a1fba1703d99196524698cb884d",
+    "url": "https://github.com/google/ruy.git"
+  },
+  {
+    "path": "ctranslate2/third_party/ruy/third_party/cpuinfo",
+    "revision": "082deffc80ce517f81dc2f3aebe6ba671fcd09c9",
+    "url": "https://github.com/pytorch/cpuinfo"
+  },
+  {
+    "path": "ctranslate2/third_party/ruy/third_party/googletest",
+    "revision": "6c58c11d5497b6ee1df3cb400ce30deb72fc28c0",
+    "url": "https://github.com/google/googletest"
+  },
+  {
+    "path": "sentencepiece",
+    "revision": "31646a467d2051eb904e0b45de3a73e91fe1c1e3",
+    "url": "https://github.com/google/sentencepiece.git"
+  }
+]
