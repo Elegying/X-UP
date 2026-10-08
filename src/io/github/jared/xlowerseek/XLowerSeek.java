@@ -41,6 +41,8 @@ public final class XLowerSeek extends io.github.libxposed.api.XposedModule {
                     catch (Throwable e) { fail(e); }
                     try { PlaybackStepHook.install(loader, settings); report("stepHook READY"); }
                     catch (Throwable e) { report("stepHook unavailable: " + e.getClass().getSimpleName()); }
+                    try { AdBlockHook.install(loader,settings);report("adBlockHook READY"); }
+                    catch(Throwable e){report("adBlockHook unavailable: "+e.getClass().getSimpleName());}
                     try { ReplySortHook.install(loader, settings); report("replySortHook READY"); }
                     catch (Throwable e) { report("replySortHook unavailable: " + e.getClass().getSimpleName()); }
                     try { AutoTranslateHook.install((Application) p.thisObject, loader, settings); report("autoTranslateHook READY"); }

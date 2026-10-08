@@ -26,6 +26,7 @@ public final class SettingsActivity extends Activity {
         ui.divider(video);addFeature(ui,video,Feature.HOLD_SPEED);
         ui.divider(video);addFeature(ui,video,Feature.DOWNLOAD);ui.navigation(video,"下载设置","",()->startActivity(new Intent(this,DownloadSettingsActivity.class)));
         LinearLayout reading=ui.section("阅读与翻译");
+        addFeature(ui,reading,Feature.AD_BLOCK);ui.divider(reading);
         latest=ui.toggle(reading,"最新回复优先","自动选最新回复，仍可手动切换。");
         ui.divider(reading);translate=ui.toggle(reading,"自动中文阅读","翻译总开关；图片文字不处理。");
         ui.navigation(reading,"翻译方式与模型","三个离线引擎可选，原生翻译备用。",()->startActivity(new Intent(this,LocalModelActivity.class)));
