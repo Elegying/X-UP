@@ -1,10 +1,11 @@
 package io.github.jared.xlowerseek;
-/** Pinned publisher weights. 462 decimal MB, below the user's 500 MB ceiling. */
+/** Pinned official weights. The same artifact is available from both Tencent channels. */
 final class LocalModelSpec {
- static final String NAME="HY-MT1.5 · 1.8B · 1.25-bit";
- static final long BYTES=461860704L,MAX_BYTES=500000000L;
- static final String SHA256="93e025c93cc082e73a3f142b757623a8b9cf541c020a8013ca4ee669556860ab";
- static final String URL="https://huggingface.co/tencent/Hy-MT1.5-1.8B-1.25bit-GGUF/resolve/3d09c4ce7dc00aa7182cb348a760c7d8f6983224/Hy-MT1.5-1.8B-1.25bit.gguf";
- static final String PAGE="https://huggingface.co/tencent/Hy-MT1.5-1.8B-1.25bit-GGUF";
+ static final String NAME="HY-MT2 · 1.8B · 1.25-bit";
+ static final long BYTES=461860800L,MAX_BYTES=500000000L;
+ static final String SHA256="cc497fe8f033b52b3b8b00a7669e9661435432f9d4cd43f7ed24400c01507a93";
+ static final String URL="https://modelscope.cn/models/Tencent-Hunyuan/Hy-MT2-1.8B-1.25Bit-GGUF/resolve/a1ba5a8101d7b257d42c0980e0d6415d0bd9e1cf/Hy-MT2-1.8B-1.25Bit.gguf";
+ static final String FALLBACK_URL="https://huggingface.co/tencent/Hy-MT2-1.8B-1.25Bit-GGUF/resolve/9df5c824a00a744fb0512a29c640466f4d97dfb0/Hy-MT2-1.8B-1.25Bit.gguf";
+ static final String PAGE="https://modelscope.cn/models/Tencent-Hunyuan/Hy-MT2-1.8B-1.25Bit-GGUF";
  private LocalModelSpec(){}
 }

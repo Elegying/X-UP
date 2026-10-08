@@ -19,7 +19,7 @@ public final class DownloadService extends Service {
     private volatile HttpURLConnection connection;
     private ResultReceiver receiver;
     private String activeUrl;
-    
+
     @Override public IBinder onBind(Intent intent){return null;}
     @Override public void onCreate(){super.onCreate();getSystemService(NotificationManager.class).createNotificationChannel(new NotificationChannel(CHANNEL,"视频保存",NotificationManager.IMPORTANCE_LOW));}
     private Notification notice(String text,int progress,boolean running){

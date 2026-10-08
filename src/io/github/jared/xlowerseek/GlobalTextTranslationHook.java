@@ -159,7 +159,7 @@ final class GlobalTextTranslationHook {
             for(Object span:spans){if(span instanceof NoCopySpan)continue;Spanned s=(Spanned)original;ranges.add(new TextTranslationPlan.Range(s.getSpanStart(span),s.getSpanEnd(span),span instanceof ClickableSpan||span instanceof ReplacementSpan));}
             TextTranslationPlan.Result result=translatePlain(original.toString(),ranges,this);
             if(result.text.equals(original.toString()))return original;
-            
+
             SpannableString out=new SpannableString(result.text);
             for(Object span:spans){if(span instanceof NoCopySpan)continue;Spanned s=(Spanned)original;out.setSpan(span,result.offset(s.getSpanStart(span)),result.offset(s.getSpanEnd(span)),s.getSpanFlags(span));}
             return out;

@@ -17,10 +17,15 @@ public final class ModelDownloadService extends Service {
   try{startForeground(NOTICE,notice());}catch(RuntimeException e){running=false;status="无法启动下载任务，请重新打开插件重试";stopSelf();return START_NOT_STICKY;}
   worker=new Thread(()->{
    try{
-    ModelTransfer.download(new URL(LocalModelSpec.URL),ModelFiles.model(this),LocalModelSpec.BYTES,LocalModelSpec.SHA256,pause,(bytes,checking)->{
+    String[] sources={LocalModelSpec.URL,LocalModelSpec.FALLBACK_URL};
+    for(int source=0;source<sources.length;source++){
+     try{ModelTransfer.download(new URL(sources[source]),ModelFiles.model(this),LocalModelSpec.BYTES,LocalModelSpec.SHA256,pause,(bytes,checking)->{
      received=bytes;verifying=checking;status=checking?"正在校验完整性…":String.format(java.util.Locale.ROOT,"%.1f / 461.9 MB",bytes/1000000.0);
      long now=SystemClock.elapsedRealtime();if(now-lastUpdate>=350||checking){lastUpdate=now;getSystemService(NotificationManager.class).notify(NOTICE,notice());}
-    });
+    });break;
+     }catch(ModelTransfer.Paused e){throw e;}
+     catch(java.io.IOException e){if(pause.get())throw new ModelTransfer.Paused();if(source==sources.length-1)throw e;status="正在尝试另一个腾讯官方下载地址…";}
+    }
     ModelFiles.activate(this);status="模型已下载并通过校验，可以离线翻译";
    }catch(ModelTransfer.Paused e){status=e.getMessage();}
    catch(Exception e){status=e instanceof java.io.IOException?e.getMessage():"模型下载失败，请检查网络或存储空间后重试";}

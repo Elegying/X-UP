@@ -5,7 +5,7 @@
          {
              ok = ok && gr.read(info.t.type);
 +#ifdef XUP_LEGACY_STQ_MODEL
-+            // Tencent's pinned 461860704-byte release predates Q2_0 taking id 42.
++            // Tencent's pinned 461860800-byte release predates Q2_0 taking id 42.
 +            // It uses id 42 for STQ; preserve the original publisher checksummed file.
 +            const auto arch_key = gguf_find_key(ctx, "general.architecture");
 +            const auto file_key = gguf_find_key(ctx, "general.file_type");
@@ -16,7 +16,7 @@
 +                    && std::string(gguf_get_val_str(ctx, arch_key)) == "hunyuan-dense"
 +                    && gguf_get_val_u32(ctx, file_key) == 41
 +                    && name_key >= 0 && gguf_get_kv_type(ctx, name_key) == GGUF_TYPE_STRING
-+                    && std::string(gguf_get_val_str(ctx, name_key)) == "MT1.5 Sherry Stride16") {
++                    && std::string(gguf_get_val_str(ctx, name_key)) == "HyMT2 1.8B 2bit Stride16") {
 +                info.t.type = GGML_TYPE_STQ1_0;
 +            }
 +#endif

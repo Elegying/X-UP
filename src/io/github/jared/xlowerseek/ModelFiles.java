@@ -1,7 +1,7 @@
 package io.github.jared.xlowerseek;
 import android.content.Context;import java.io.File;
 final class ModelFiles {
- static File model(Context c){return new File(new File(c.getFilesDir(),"translation-model"),"hy-mt-1.25bit.gguf");}
+ static File model(Context c){return new File(new File(c.getFilesDir(),"translation-model"),"hy-mt2-1.25bit.gguf");}
  static boolean ready(Context c){File f=model(c);return f.isFile()&&f.length()==LocalModelSpec.BYTES&&c.getSharedPreferences("model",0).getLong("verified_mtime",-1)==f.lastModified()&&LocalModelSpec.SHA256.equals(c.getSharedPreferences("model",0).getString("sha256",""));}
  static long revision(Context c){return c.getSharedPreferences("model",0).getLong("revision",0);}
  static void activate(Context c)throws java.io.IOException{
