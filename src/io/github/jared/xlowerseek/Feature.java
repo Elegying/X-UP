@@ -2,7 +2,7 @@ package io.github.jared.xlowerseek;
 
 /** Feature definitions; translation engines use one mutually exclusive mode. New features reuse the same persistence and UI path. */
 enum Feature {
-    LOWER_SEEK("lower_seek","下半区双击快进","关闭后保留 X 原有双击操作。"),
+    LOWER_SEEK("lower_seek","下半区双击快进","双击后继续连点可累加，关闭保留 X 原操作。"),
     SEEK_STEP("seek_step","自定义快进时长","关闭后使用 X 原有时长。"),
     SWIPE_SEEK("swipe_seek","滑动调进度","全屏左右滑动，进度条同步更新。"),
     HOLD_SPEED("hold_speed","长按 2×","长按加速，松手恢复原速。"),

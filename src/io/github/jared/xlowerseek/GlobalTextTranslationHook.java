@@ -27,7 +27,7 @@ final class GlobalTextTranslationHook {
     private boolean replacing,enabled;
     private final Map<LocalTranslationClient.Listener,PostContextIndex.Binding> contextBindings=new WeakHashMap<>();
     private String engine="";
-    private final Runnable visibilityTick=new Runnable(){public void run(){if(resumed>0){invalidate();main.postDelayed(()->client.pruneInvisible(),250);main.postDelayed(this,1000);}}};
+    private final Runnable visibilityTick=new Runnable(){public void run(){if(resumed>0){refreshPending();main.postDelayed(()->client.pruneInvisible(),250);main.postDelayed(this,1000);}}};
     private long retry;private long revision=-1;private boolean localEnabled,contextEnabled;
     private GlobalTextTranslationHook(Application app,ClassLoader loader,RemoteSettings settings){
         this.settings=settings;enabled=settings.translate;client=new LocalTranslationClient(app,settings);
@@ -63,7 +63,7 @@ final class GlobalTextTranslationHook {
         });
         settings.addListener(()->hook.main.post(hook::updateSettings));
         PostContextHook.INDEX.onChange(()->hook.main.post(()->{
-            if(hook.contextRefreshPending||hook.resumed==0||!settings.feature(Feature.LOCAL_TEXT)||!settings.translate)return;
+            if(hook.contextRefreshPending||hook.resumed==0||!settings.feature(Feature.LOCAL_TEXT)||!settings.translate||!settings.engine.equals("tencent")||!settings.feature(Feature.LOCAL_CONTEXT))return;
             hook.contextRefreshPending=true;
             hook.main.postDelayed(()->{hook.contextRefreshPending=false;if(hook.resumed>0)hook.invalidate();},200);
         }));
@@ -73,6 +73,11 @@ final class GlobalTextTranslationHook {
         if(engine.equals(settings.engine)&&enabled==settings.translate&&revision==settings.localRevision&&localEnabled==settings.feature(Feature.LOCAL_TEXT)&&contextEnabled==settings.feature(Feature.LOCAL_CONTEXT))return;
         engine=settings.engine;enabled=settings.translate;revision=settings.localRevision;localEnabled=settings.feature(Feature.LOCAL_TEXT);contextEnabled=settings.feature(Feature.LOCAL_CONTEXT);
         client.clear();client.setForeground(resumed>0);contextBindings.clear();invalidate();
+    }
+    private void refreshPending(){
+        client.refreshPending();
+        // TextViews may become visible without being rebound; retain their visibility checks.
+        for(WeakReference<ViewBinding> ref:new ArrayList<>(views.values())){ViewBinding binding=ref.get();if(binding!=null&&binding.waiting)binding.changed();}
     }
     private void invalidate(){
         attribution.update(currentActivity.get(),resumed>0&&settings.translate&&settings.feature(Feature.LOCAL_TEXT)&&settings.engine.equals("mlkit"));
@@ -97,7 +102,7 @@ final class GlobalTextTranslationHook {
                     String key=source.toString();
                     Observer observer=observers.get(key);
                     if(observer==null){
-                        if(!settings.translate||!PostTranslationPolicy.eligible(null,key)){
+                        if(!settings.translate||!settings.feature(Feature.LOCAL_TEXT)||!PostTranslationPolicy.eligible(null,key)){
                             if(source!=incoming){p.args[0]=source;if(composer+1<p.args.length&&p.args[composer+1] instanceof Integer)p.args[composer+1]=(((Integer)p.args[composer+1])&~14)|5;}
                             return;
                         }
@@ -136,8 +141,9 @@ final class GlobalTextTranslationHook {
     private TextTranslationPlan.Result translatePlain(String text,List<TextTranslationPlan.Range> ranges,LocalTranslationClient.Listener listener){
         WholeTextPlan plan=new WholeTextPlan(text,ranges);
         if(!settings.feature(Feature.LOCAL_TEXT)||!PostTranslationPolicy.eligible(null,text))return plan.decode(plan.encoded);
-        PostContextIndex.Context context=contextBindings.computeIfAbsent(listener,k->new PostContextIndex.Binding()).resolve(PostContextHook.INDEX.forText(text));
-        return plan.decode(client.lookup(plan.encoded,settings.engine.equals("tencent")&&settings.feature(Feature.LOCAL_CONTEXT)?context.text:"",listener));
+        String context="";
+        if(settings.engine.equals("tencent")&&settings.feature(Feature.LOCAL_CONTEXT))context=contextBindings.computeIfAbsent(listener,k->new PostContextIndex.Binding()).resolve(PostContextHook.INDEX.forText(text)).text;
+        return plan.decode(client.lookup(plan.encoded,context,listener));
     }
 
     private void textViews(){
@@ -153,16 +159,18 @@ final class GlobalTextTranslationHook {
         });
     }
     private final class ViewBinding implements LocalTranslationClient.Listener {
-        final WeakReference<TextView> view;final CharSequence original;final TextView.BufferType type;
+        final WeakReference<TextView> view;final CharSequence original;final TextView.BufferType type;boolean waiting=true;
         ViewBinding(TextView view,CharSequence text,TextView.BufferType type){this.view=new WeakReference<>(view);original=text;this.type=type;}
         CharSequence translated(){
             if(!settings.translate||resumed==0)return original;
+            if(!settings.feature(Feature.LOCAL_TEXT)||!PostTranslationPolicy.eligible(null,original.toString())){waiting=false;return original;}
             TextView current=view.get();if(current==null||!current.isShown()||!current.getGlobalVisibleRect(new android.graphics.Rect()))return original;
             List<TextTranslationPlan.Range> ranges=new ArrayList<>();
             Object[] spans=original instanceof Spanned?((Spanned)original).getSpans(0,original.length(),Object.class):new Object[0];
             for(Object span:spans){if(span instanceof NoCopySpan)continue;Spanned s=(Spanned)original;ranges.add(new TextTranslationPlan.Range(s.getSpanStart(span),s.getSpanEnd(span),span instanceof ClickableSpan||span instanceof ReplacementSpan));}
             TextTranslationPlan.Result result=translatePlain(original.toString(),ranges,this);
-            if(result.text.equals(original.toString()))return original;
+            waiting=result.text.equals(original.toString());
+            if(waiting)return original;
 
             SpannableString out=new SpannableString(result.text);
             for(Object span:spans){if(span instanceof NoCopySpan)continue;Spanned s=(Spanned)original;out.setSpan(span,result.offset(s.getSpanStart(span)),result.offset(s.getSpanEnd(span)),s.getSpanFlags(span));}

@@ -56,7 +56,7 @@ public final class XLowerSeek extends io.github.libxposed.api.XposedModule {
                     Hooks.findAndHookMethod(android.app.Activity.class, "onResume", new HookCallback() {
                         @Override protected void afterHookedMethod(HookParam param) { settings.refresh(); }
                     });
-                    report("READY API=102 X=312310001 adapter=12.31.0 doubleTapOnly=true");
+                    report("READY API=102 X=312310001 adapter=12.31.0 nativeSeekBurst=true");
                 } catch (Throwable e) { fail(e); }
             }
         });
@@ -82,6 +82,7 @@ public final class XLowerSeek extends io.github.libxposed.api.XposedModule {
                 } catch (Throwable e) { fail(e); }
             }
         });
+        ContinuationTapHook.install(loader, ()->!failed&&settings.feature(Feature.LOWER_SEEK), sizes);
         Hooks.hookMethod(doubleTap, new HookCallback() {
             @Override protected void beforeHookedMethod(HookParam p) {
                 if (failed||!settings.feature(Feature.LOWER_SEEK)) return;
@@ -93,7 +94,7 @@ public final class XLowerSeek extends io.github.libxposed.api.XposedModule {
                     float x = Float.intBitsToFloat((int) (point >> 32));
                     float y = Float.intBitsToFloat((int) point);
                     boolean lower = GesturePolicy.isLower(x, y, size[0], size[1]);
-                    if (lower) p.args[1] = GesturePolicy.forwardOffset(point, size[0]);
+                    if (lower) p.args[1] = GesturePolicy.lowerForwardOffset(point, size[0], size[1]);
                     Log.i(TAG, "doubleTap lower=" + lower);
                 } catch (Throwable e) { fail(e); }
             }
