@@ -8,7 +8,7 @@ public final class UpdateActivity extends Activity {
  private final Handler main=new Handler(Looper.getMainLooper());
  private TextView state,notes;private Button check,action,cancel;private Switch beta;private ProgressBar progress;
  private UpdateRelease candidate;private boolean checking,verifying,resumed,permissionPending,verificationFailed;
- private final Runnable tick=new Runnable(){public void run(){if(resumed){refresh();main.postDelayed(this,600);}}};
+ private final Runnable tick=new Runnable(){public void run(){if(resumed){refresh();try{int status=UpdateDownload.state(UpdateActivity.this).status;if(!verifying&&(status==DownloadManager.STATUS_RUNNING||status==DownloadManager.STATUS_PENDING||status==DownloadManager.STATUS_PAUSED))main.postDelayed(this,600);}catch(RuntimeException ignored){}}}};
  public void onCreate(Bundle saved){
   super.onCreate(saved);permissionPending=saved!=null&&saved.getBoolean("permissionPending");
   SettingsUi ui=new SettingsUi(this,"检查更新","当前版本 "+BuildConfig.VERSION_NAME,true);
@@ -55,7 +55,7 @@ public final class UpdateActivity extends Activity {
   ConnectivityManager cm=getSystemService(ConnectivityManager.class);
   if(cm!=null&&cm.isActiveNetworkMetered())new AlertDialog.Builder(this).setTitle("使用流量下载？").setMessage("安装包约 "+mb(candidate.size)+"，将使用当前计费网络。").setPositiveButton("继续下载",(d,w)->download()).setNegativeButton("取消",null).show();else download();
  }
- private void download(){try{UpdateDownload.start(this,candidate);verificationFailed=false;progress.setProgress(0);refresh();}catch(Exception e){state.setText("无法开始下载："+message(e));}}
+ private void download(){try{UpdateDownload.start(this,candidate);verificationFailed=false;progress.setProgress(0);refresh();main.removeCallbacks(tick);main.post(tick);}catch(Exception e){state.setText("无法开始下载："+message(e));}}
  private void prepare(boolean install){
   if(verifying)return;verifying=true;check.setEnabled(false);beta.setEnabled(false);action.setEnabled(false);cancel.setEnabled(false);state.setText("正在校验安装包…");progress.setIndeterminate(true);long id=UpdateDownload.id(this);Context app=getApplicationContext();
   IO.execute(()->{try{UpdateDownload.verify(app,id);main.post(()->{if(isDestroyed())return;verifying=false;progress.setIndeterminate(false);refresh();if(install&&resumed)install();});}
@@ -64,7 +64,10 @@ public final class UpdateActivity extends Activity {
  private void install(){
   try{
    if(!getPackageManager().canRequestPackageInstalls()){permissionPending=true;state.setText("请允许 X-UP 安装更新，然后返回此页。");startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,Uri.parse("package:"+getPackageName())));return;}
-   Uri uri=UpdateDownload.uri(this);Intent i=new Intent(Intent.ACTION_VIEW).setDataAndType(uri,"application/vnd.android.package-archive").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);i.setClipData(ClipData.newRawUri("X-UP 更新",uri));startActivity(i);
+   Uri uri=UpdateDownload.uri(this);Intent i=new Intent(Intent.ACTION_VIEW).setDataAndType(uri,"application/vnd.android.package-archive").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);i.setClipData(ClipData.newRawUri("X-UP 更新",uri));
+   java.util.List<android.content.pm.ResolveInfo> installers=getPackageManager().queryIntentActivities(i,android.content.pm.PackageManager.MATCH_SYSTEM_ONLY|android.content.pm.PackageManager.MATCH_DEFAULT_ONLY);
+   if(installers.isEmpty())throw new android.content.ActivityNotFoundException("系统安装器不可用");
+   android.content.pm.ActivityInfo target=installers.get(0).activityInfo;i.setComponent(new ComponentName(target.packageName,target.name));startActivity(i);
   }catch(RuntimeException e){permissionPending=false;state.setText("无法打开系统安装界面，请检查安装权限后重试。");}
  }
  private static String mb(long bytes){return String.format(java.util.Locale.CHINA,"%.1f MB",Math.max(0,bytes)/1000000d);}

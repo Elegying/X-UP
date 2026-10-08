@@ -1,6 +1,6 @@
 # X-UP
 
-面向 X（原 Twitter）的 LSPosed 模块，使用现代 Xposed API 102。当前开发版：1.8.0-beta6。
+面向 X（原 Twitter）的 LSPosed 模块，使用现代 Xposed API 102。当前开发版：1.8.0-beta7。
 
 ## 功能
 
