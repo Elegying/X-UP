@@ -6,7 +6,7 @@ final class OpusTranslator implements OfflineEngine {
  OpusTranslator(String path){handle=open(path);if(handle==0)throw new IllegalStateException("OPUS 无法加载");}
  public String translate(String text,String context,TranslationCancellation cancelled)throws Exception{
   return SmallModelText.translate(text,(part,ja)->{String key=ja+":"+part;String hit=cache.get(key);if(hit!=null)return hit;
-   long epoch=ticket(handle);cancelled.check();String value=new String(run(handle,part.getBytes(StandardCharsets.UTF_8),ja,epoch),StandardCharsets.UTF_8).trim();cancelled.check();cache.put(key,value);while(cache.size()>256)cache.remove(cache.keySet().iterator().next());return value;
+   long epoch=ticket(handle);cancelled.check();String value=new String(run(handle,part.getBytes(StandardCharsets.UTF_8),ja,epoch),StandardCharsets.UTF_8).trim();cancelled.check();if(!TranslationOutput.clean(part,value))throw new IllegalStateException("译文含未知字符，保留原文");cache.put(key,value);while(cache.size()>256)cache.remove(cache.keySet().iterator().next());return value;
   },cancelled);
  }
  public synchronized void cancel(){if(handle!=0)cancel(handle);}

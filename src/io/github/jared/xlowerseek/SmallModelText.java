@@ -4,7 +4,8 @@ import java.util.*;import java.util.regex.*;
 /** Small MT models do not understand prompts. Preserve anchors outside inference, in sentence-sized units. */
 final class SmallModelText {
  interface Translator {String translate(String text,boolean japanese)throws Exception;}
- private static final Pattern MARKERS=Pattern.compile("⟪X[^⟫]*⟫");
+ // Keep pictographs, joiners, skin tones, flags, variation selectors and keycaps verbatim.
+ private static final Pattern MARKERS=Pattern.compile("⟪X[^⟫]*⟫|[0-9#*]\\x{FE0F}?\\x{20E3}|[\\p{So}\\p{Sk}\\x{200D}\\x{FE0E}\\x{FE0F}\\x{E0020}-\\x{E007F}]+");
  static boolean japanese(String text){return text.codePoints().anyMatch(c->{Character.UnicodeScript s=Character.UnicodeScript.of(c);return s==Character.UnicodeScript.HIRAGANA||s==Character.UnicodeScript.KATAKANA;});}
  static String translate(String source,Translator translator,TranslationCancellation cancel)throws Exception{
   boolean ja=japanese(source);StringBuilder out=new StringBuilder();Matcher m=MARKERS.matcher(source);int at=0;
@@ -24,8 +25,9 @@ final class SmallModelText {
  private static void unit(String text,boolean ja,Translator translator,TranslationCancellation cancel,StringBuilder out)throws Exception{
   cancel.check();int left=0,right=text.length();while(left<right&&Character.isWhitespace(text.charAt(left)))left++;while(right>left&&Character.isWhitespace(text.charAt(right-1)))right--;
   String core=text.substring(left,right);out.append(text,0,left);
-  if(!core.isEmpty()&&PostTranslationPolicy.eligible(null,core)){
-   String translated=translator.translate(core,ja);cancel.check();if(translated==null||translated.trim().isEmpty())throw new IllegalStateException("模型未返回完整译文");out.append(translated.trim());
+  SmallModelPolicy.Route route=SmallModelPolicy.route(core);
+  if(route!=SmallModelPolicy.Route.KEEP){
+   String translated=translator.translate(core,route==SmallModelPolicy.Route.JAPANESE);cancel.check();if(!TranslationOutput.clean(core,translated))throw new IllegalStateException("模型未返回完整译文");out.append(translated.trim());
   }else out.append(core);
   out.append(text,right,text.length());
  }

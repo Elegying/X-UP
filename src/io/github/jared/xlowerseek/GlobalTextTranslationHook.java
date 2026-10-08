@@ -102,7 +102,7 @@ final class GlobalTextTranslationHook {
                     String key=source.toString();
                     Observer observer=observers.get(key);
                     if(observer==null){
-                        if(!settings.translate||!settings.feature(Feature.LOCAL_TEXT)||!PostTranslationPolicy.eligible(null,key)){
+                        if(!settings.translate||!settings.feature(Feature.LOCAL_TEXT)||IdentityTextHook.INDEX.contains(key)||!PostTranslationPolicy.eligible(null,key)){
                             if(source!=incoming){p.args[0]=source;if(composer+1<p.args.length&&p.args[composer+1] instanceof Integer)p.args[composer+1]=(((Integer)p.args[composer+1])&~14)|5;}
                             return;
                         }
@@ -140,7 +140,7 @@ final class GlobalTextTranslationHook {
     }
     private TextTranslationPlan.Result translatePlain(String text,List<TextTranslationPlan.Range> ranges,LocalTranslationClient.Listener listener){
         WholeTextPlan plan=new WholeTextPlan(text,ranges);
-        if(!settings.feature(Feature.LOCAL_TEXT)||!PostTranslationPolicy.eligible(null,text))return plan.decode(plan.encoded);
+        if(!settings.feature(Feature.LOCAL_TEXT)||IdentityTextHook.INDEX.contains(text)||!PostTranslationPolicy.eligible(null,text))return plan.decode(plan.encoded);
         String context="";
         if(settings.engine.equals("tencent")&&settings.feature(Feature.LOCAL_CONTEXT))context=contextBindings.computeIfAbsent(listener,k->new PostContextIndex.Binding()).resolve(PostContextHook.INDEX.forText(text)).text;
         return plan.decode(client.lookup(plan.encoded,context,listener));
@@ -163,7 +163,7 @@ final class GlobalTextTranslationHook {
         ViewBinding(TextView view,CharSequence text,TextView.BufferType type){this.view=new WeakReference<>(view);original=text;this.type=type;}
         CharSequence translated(){
             if(!settings.translate||resumed==0)return original;
-            if(!settings.feature(Feature.LOCAL_TEXT)||!PostTranslationPolicy.eligible(null,original.toString())){waiting=false;return original;}
+            if(!settings.feature(Feature.LOCAL_TEXT)||IdentityTextHook.INDEX.contains(original.toString())||!PostTranslationPolicy.eligible(null,original.toString())){waiting=false;return original;}
             TextView current=view.get();if(current==null||!current.isShown()||!current.getGlobalVisibleRect(new android.graphics.Rect()))return original;
             List<TextTranslationPlan.Range> ranges=new ArrayList<>();
             Object[] spans=original instanceof Spanned?((Spanned)original).getSpans(0,original.length(),Object.class):new Object[0];

@@ -51,6 +51,8 @@ public final class XLowerSeek extends io.github.libxposed.api.XposedModule {
                     catch (Throwable e) { report("postTranslationBridge unavailable: " + e.getClass().getSimpleName()); }
                     try { PostContextHook.install(loader); report("postContext READY"); }
                     catch(Throwable e){report("postContext unavailable: "+e.getClass().getSimpleName());}
+                    try { IdentityTextHook.install(loader); report("identityText READY"); }
+                    catch (Throwable t) { report("identityText FAILED " + t); }
                     try { GlobalTextTranslationHook.install((Application)p.thisObject, loader, settings); report("globalTextTranslation READY"); }
                     catch (Throwable e) { report("globalTextTranslation unavailable: " + e.getClass().getSimpleName()); }
                     try { VideoDownloadHook.install((Application) p.thisObject, loader,settings); report("downloadHook READY"); }

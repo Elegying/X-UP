@@ -13,7 +13,7 @@ final class MlKitTranslator implements OfflineEngine {
    // Await completion directly; no periodic polling delay for each sentence.
    // SDK tasks cannot be interrupted: cancellation is checked before publishing/continuing.
    String value=Tasks.await(engine.translate(part),15,TimeUnit.SECONDS);
-   cancel.check();cache.put(key,value);while(cache.size()>256)cache.remove(cache.keySet().iterator().next());return value;
+   cancel.check();if(!TranslationOutput.clean(part,value))throw new IllegalStateException("译文含未知字符，保留原文");cache.put(key,value);while(cache.size()>256)cache.remove(cache.keySet().iterator().next());return value;
   },cancel);
  }
  public void close(){for(Translator t:engines.values())t.close();engines.clear();cache.clear();}
