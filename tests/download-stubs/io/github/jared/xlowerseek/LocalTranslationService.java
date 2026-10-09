@@ -1,0 +1,1 @@
+package io.github.jared.xlowerseek;final class LocalTranslationService {static void foreground(android.content.Context c,int uid,String id,boolean b){}static void cancel(int uid,String id){}static String status(){return "";}static void request(android.content.Context c,int uid,String id,String engine,long revision,String text,String background,android.os.ResultReceiver r){}}

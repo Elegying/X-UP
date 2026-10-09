@@ -8,7 +8,8 @@ public final class Handler {
  public boolean postDelayed(Runnable r,long delay){synchronized(jobs){jobs.add(new Job(this,r,SystemClock.now+delay));}return true;}
  public void removeCallbacks(Runnable r){synchronized(jobs){jobs.removeIf(j->j.owner==this&&j.action==r);}}
  public void removeCallbacksAndMessages(Object ignored){synchronized(jobs){jobs.removeIf(j->j.owner==this);}}
- public static void drain(){while(true){Job next=null;synchronized(jobs){for(Job j:jobs)if(j.at<=SystemClock.now){next=j;break;}if(next!=null)jobs.remove(next);}if(next==null)return;next.action.run();}}
+ public static boolean drainOne(){Job next=null;synchronized(jobs){for(Job j:jobs)if(j.at<=SystemClock.now){next=j;break;}if(next!=null)jobs.remove(next);}if(next==null)return false;next.action.run();return true;}
+ public static void drain(){while(drainOne()){} }
  public static void advance(long ms){SystemClock.now+=ms;drain();}
  public static int queued(){synchronized(jobs){return jobs.size();}}
 }

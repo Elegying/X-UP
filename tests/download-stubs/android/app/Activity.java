@@ -1,0 +1,1 @@
+package android.app;public class Activity extends android.content.Context {public android.content.Intent intent=new android.content.Intent();public android.content.Intent getIntent(){return intent;}protected void onResume(){}public void finish(){}}

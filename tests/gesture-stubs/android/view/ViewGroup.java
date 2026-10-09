@@ -1,0 +1,1 @@
+package android.view; public class ViewGroup extends View { public void addView(View v,Object p){} public void removeView(View v){} }

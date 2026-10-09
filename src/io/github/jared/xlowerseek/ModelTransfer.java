@@ -9,20 +9,24 @@ final class ModelTransfer {
   download(url,target,size,digest,pause,progress,u->(HttpURLConnection)u.openConnection());
  }
  static void download(URL url,File target,long size,String digest,AtomicBoolean pause,Progress progress,Connections connections)throws Exception{
+  checkPaused(pause);
   if(size<=0||size>LocalModelSpec.MAX_BYTES||!digest.matches("[0-9a-f]{64}"))throw new IOException("模型超出允许大小或校验信息无效");
   File parent=target.getParentFile();if(!parent.isDirectory()&&!parent.mkdirs())throw new IOException("无法创建模型目录");
   if(target.isFile()&&target.length()==size){progress.update(size,true);if(verify(target,digest,pause)){progress.update(size,false);return;}}
   File partial=new File(target.getPath()+".part");if(partial.length()>size&&!partial.delete())throw new IOException("无法清理不完整模型");
   long offset=partial.length();if(parent.getUsableSpace()<size-offset+32*1024*1024L)throw new IOException("存储空间不足，请至少留出 500 MB 可用空间");
   if(offset<size){
-   HttpURLConnection c=connect(url,offset,connections);
+   HttpURLConnection c=connect(url,offset,pause,connections);
    try{
-    int status=c.getResponseCode();
+    int status=c.getResponseCode();checkPaused(pause);
     if(status==200)offset=0;
     else if(status!=206)throw new IOException("模型下载失败（HTTP "+status+"），请检查网络后重试");
     if(status==206){String range=c.getHeaderField("Content-Range");if(range==null||!range.equals("bytes "+offset+"-"+(size-1)+"/"+size))throw new IOException("下载续传范围不正确");}
     long length=c.getContentLengthLong();if(length>=0&&length!=size-offset)throw new IOException("模型大小与发布版本不符");
+    checkPaused(pause);
     try(InputStream in=c.getInputStream();RandomAccessFile out=new RandomAccessFile(partial,"rw")){
+     // Opening the body can block; do not discard a resumable file if pause arrived meanwhile.
+     checkPaused(pause);
      out.setLength(offset);out.seek(offset);byte[] bytes=new byte[128*1024];int n;long received=offset;
      while(true){if(pause.get())throw new Paused();n=in.read(bytes);if(n<0)break;if(received+n>size)throw new IOException("模型下载超过大小限制");out.write(bytes,0,n);received+=n;progress.update(received,false);}
      out.getFD().sync();if(received!=size)throw new IOException("下载中断，点击继续下载即可续传");
@@ -34,13 +38,19 @@ final class ModelTransfer {
   if(pause.get())throw new Paused();
   Files.move(partial.toPath(),target.toPath(),StandardCopyOption.REPLACE_EXISTING,StandardCopyOption.ATOMIC_MOVE);progress.update(size,false);
  }
- private static HttpURLConnection connect(URL url,long offset,Connections connections)throws IOException{
+ private static void checkPaused(AtomicBoolean pause)throws Paused{if(pause.get())throw new Paused();}
+ private static HttpURLConnection connect(URL url,long offset,AtomicBoolean pause,Connections connections)throws IOException{
   for(int i=0;i<6;i++){
+   checkPaused(pause);
    if(!"https".equalsIgnoreCase(url.getProtocol()))throw new IOException("模型下载只允许 HTTPS");
-   HttpURLConnection c=connections.open(url);c.setConnectTimeout(12000);c.setReadTimeout(10000);c.setInstanceFollowRedirects(false);c.setRequestProperty("Accept-Encoding","identity");if(offset>0)c.setRequestProperty("Range","bytes="+offset+"-");
-   int status;try{status=c.getResponseCode();}catch(IOException e){c.disconnect();throw e;}
-   if(status<300||status>=400)return c;
-   String location=c.getHeaderField("Location");c.disconnect();if(location==null)throw new IOException("下载地址不可用");url=new URL(url,location);
+   HttpURLConnection c=connections.open(url);boolean retained=false;
+   try{
+    checkPaused(pause);
+    c.setConnectTimeout(12000);c.setReadTimeout(10000);c.setInstanceFollowRedirects(false);c.setRequestProperty("Accept-Encoding","identity");if(offset>0)c.setRequestProperty("Range","bytes="+offset+"-");
+    int status=c.getResponseCode();checkPaused(pause);
+    if(status<300||status>=400){retained=true;return c;}
+    String location=c.getHeaderField("Location");checkPaused(pause);if(location==null)throw new IOException("下载地址不可用");url=new URL(url,location);
+   }finally{if(!retained)c.disconnect();}
   }
   throw new IOException("下载重定向过多，请稍后重试");
  }

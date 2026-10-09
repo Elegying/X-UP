@@ -2,6 +2,7 @@ package io.github.jared.xlowerseek;
 
 import android.app.Activity;
 import android.app.Application;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Rect;
@@ -30,8 +31,7 @@ final class VideoDownloadHook implements Application.ActivityLifecycleCallbacks 
     private Candidate selected;
     private boolean downloading;
     private int downloadProgress=-1;
-    private boolean downloadAcknowledged;
-    private final Runnable downloadTimeout=()->{if(downloading&&!downloadAcknowledged){downloading=false;downloadText="保存到相册";update();}};
+    private VideoDownloadClient downloads;
     private String downloadText = "保存到相册";
     private final Runnable tick = new Runnable() { public void run() { try {update();} catch(Throwable e){gestures.reset();gesturePlayer=null;gestureSurface=null;} if (activity.get()!=null) main.postDelayed(this, 500); } };
     private static final class Candidate {
@@ -40,6 +40,22 @@ final class VideoDownloadHook implements Application.ActivityLifecycleCallbacks 
     }
     static void install(Application app, ClassLoader loader,RemoteSettings settings) throws Exception {
         VideoDownloadHook hook = new VideoDownloadHook();hook.settings=settings;
+        hook.downloads = new VideoDownloadClient(app, new VideoDownloadClient.Listener() {
+            public void changed(boolean busy, int progress, String message) {
+                hook.downloading = busy; hook.downloadProgress = progress; hook.downloadText = message;
+                try { hook.update(); } catch (RuntimeException ignored) {}
+            }
+            public void launch(String id, String capability) {
+                Activity a = hook.activity.get();
+                if (a == null || a.isFinishing()) throw new IllegalStateException();
+                a.startActivity(new Intent().setClassName("io.github.jared.xlowerseek", "io.github.jared.xlowerseek.DownloadActivity")
+                        .putExtra("id", id).putExtra("capability", capability));
+            }
+            public void completed(String message) {
+                Activity a = hook.activity.get();
+                if (a != null) Toast.makeText(a, message, Toast.LENGTH_LONG).show();
+            }
+        });
         hook.progressSync.install(loader);
         hook.gestures=new FullScreenGestureHook(new FullScreenGestureHook.Target(){
             public Object player(){return hook.gesturePlayer;}
@@ -158,7 +174,7 @@ final class VideoDownloadHook implements Application.ActivityLifecycleCallbacks 
         if(gesturePlayer!=nextPlayer)gestures.reset();
         gesturePlayer=nextPlayer;gestureSurface=nextSurface;
         selected=next;
-        if(button==null && next!=null && settings.feature(Feature.DOWNLOAD)) {
+        if(button==null && fullScreen && ((next!=null && settings.feature(Feature.DOWNLOAD)) || downloading)) {
             button=new ImageButton(a);downloadIcon=new DownloadIcon();button.setImageDrawable(downloadIcon);button.setScaleType(ImageView.ScaleType.FIT_CENTER);
             button.setContentDescription("保存当前视频到相册");
             int pad=dp(a,14);button.setPadding(pad,pad,pad,pad);button.setMinimumHeight(dp(a,44));
@@ -168,32 +184,24 @@ final class VideoDownloadHook implements Application.ActivityLifecycleCallbacks 
             ((ViewGroup)decor).addView(button,lp);
             button.setOnClickListener(v -> download());
         }
-        if(button!=null) {button.setVisibility(next==null||!settings.feature(Feature.DOWNLOAD)?View.GONE:View.VISIBLE);button.setContentDescription(downloading?downloadText:"保存当前视频到相册");button.setEnabled(!downloading);downloadIcon.setBusy(downloading,downloadProgress);}
+        if(button!=null) {button.setVisibility(!fullScreen||((next==null||!settings.feature(Feature.DOWNLOAD))&&!downloading)?View.GONE:View.VISIBLE);button.setContentDescription(downloading?downloadText+"，点击查看或取消":"保存当前视频到相册");button.setEnabled(true);downloadIcon.setBusy(downloading,downloadProgress);}
     }
     private void download() {
-        try{update();}catch(Throwable e){return;}
-        Activity a=activity.get(); Candidate candidate=selected;
-        if(a==null||candidate==null||downloading||!settings.feature(Feature.DOWNLOAD))return;
-        downloadAcknowledged=false;downloadProgress=-1;downloading=true;main.postDelayed(downloadTimeout,30000);downloadText="准备下载…";update();
-        ResultReceiver receiver=new ResultReceiver(main) {
-            @Override protected void onReceiveResult(int code,Bundle data) {
-                if(data==null)return;
-                downloadAcknowledged=true;main.removeCallbacks(downloadTimeout);
-                if(code==1) {downloadText=data.getString("message","下载中…");downloadProgress=data.getInt("progress",-1);}
-                else {
-                    downloading=false;downloadText="保存到相册";
-                    Activity now=activity.get();
-                    if(now!=null)Toast.makeText(now,data.getString("message",code==2?"已保存到相册":"下载失败，请重试"),Toast.LENGTH_LONG).show();
-                }
-                try{update();}catch(Throwable ignored){}
-            }
-        };
-        Intent intent=new Intent().setClassName("io.github.jared.xlowerseek","io.github.jared.xlowerseek.DownloadActivity")
-            .putExtra("url",candidate.url).putExtra("receiver",ResultReceiverTransport.remote(receiver));
-        try {a.startActivity(intent);} catch(RuntimeException e) {main.removeCallbacks(downloadTimeout);downloading=false;downloadText="保存到相册";Toast.makeText(a,"请先打开插件设置页，再重试下载",Toast.LENGTH_LONG).show();}
+        try { update(); } catch (Throwable e) { return; }
+        Activity a = activity.get();
+        if (a == null) return;
+        if (downloading) {
+            Runnable cancel = downloads.cancellation();
+            downloads.refresh();
+            new AlertDialog.Builder(a).setTitle("视频下载").setMessage(downloadText)
+                    .setNegativeButton("继续下载", null)
+                    .setPositiveButton("取消下载", (dialog, which) -> cancel.run()).show();
+            return;
+        }
+        if (selected != null && settings.feature(Feature.DOWNLOAD)) downloads.start(selected.url);
     }
     private static int dp(Activity a,int n){return Math.round(n*a.getResources().getDisplayMetrics().density);}
-    public void onActivityResumed(Activity a){if(!a.getPackageName().equals("com.twitter.android"))return;activity=new WeakReference<>(a);main.removeCallbacks(tick);main.post(tick);}
-    public void onActivityPaused(Activity a){if(activity.get()==a){gestures.reset();gesturePlayer=null;gestureSurface=null;activity.clear();main.removeCallbacks(tick);if(button!=null&&button.getParent()!=null)((ViewGroup)button.getParent()).removeView(button);button=null;selected=null;}}
+    public void onActivityResumed(Activity a){if(!a.getPackageName().equals("com.twitter.android"))return;activity=new WeakReference<>(a);downloads.visible(true);main.removeCallbacks(tick);main.post(tick);}
+    public void onActivityPaused(Activity a){if(activity.get()==a){downloads.visible(false);gestures.reset();gesturePlayer=null;gestureSurface=null;activity.clear();main.removeCallbacks(tick);if(button!=null&&button.getParent()!=null)((ViewGroup)button.getParent()).removeView(button);button=null;selected=null;}}
     public void onActivityCreated(Activity a,Bundle b){} public void onActivityStarted(Activity a){} public void onActivityStopped(Activity a){} public void onActivitySaveInstanceState(Activity a,Bundle b){} public void onActivityDestroyed(Activity a){}
 }

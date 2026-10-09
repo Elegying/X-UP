@@ -6,7 +6,7 @@ import android.util.Log;
 /** API 102 remote preferences, read-only inside X and updated by framework notifications. */
 final class RemoteSettings {
     volatile int seconds=10;
-    volatile String engine="tencent";
+    volatile String engine=LocalEngine.DEFAULT.id;
     volatile boolean latest=true;
     volatile boolean translate=true;
     volatile long localRevision,retry;
@@ -28,7 +28,7 @@ final class RemoteSettings {
             long nextRetry=prefs.getLong("translation_retry",0);
             int mode=TranslationMode.normalize(prefs.getInt(TranslationMode.KEY,TranslationMode.LOCAL));
             java.util.Set<Feature> nextFeatures=java.util.EnumSet.noneOf(Feature.class);for(Feature f:Feature.values())if(f==Feature.NATIVE_TRANSLATE||f==Feature.LOCAL_TEXT?TranslationMode.enabled(mode,f):prefs.getBoolean(f.key,true))nextFeatures.add(f);
-            String nextEngine=LocalEngine.parse(prefs.getString(LocalEngine.KEY,"tencent")).id;
+            String nextEngine=LocalEngine.parse(prefs.getString(LocalEngine.KEY,LocalEngine.DEFAULT.id)).id;
             boolean changed=!engine.equals(nextEngine)||!features.equals(nextFeatures)||nextLatest!=latest||next!=seconds||nextRetry!=retry||nextTranslate!=translate||nextRevision!=localRevision;
             for(Feature f:Feature.values())if(features.contains(f)!=nextFeatures.contains(f))Log.i("XLowerSeek","feature "+f.key+"="+nextFeatures.contains(f));
             engine=nextEngine;features=nextFeatures;retry=nextRetry;localRevision=nextRevision;

@@ -2,6 +2,7 @@ package io.github.jared.xlowerseek;
 import android.content.*;import android.os.*;import android.net.*;import java.util.*;import java.util.concurrent.*;
 public final class LocalTranslationClientTest {
  static int checks;static void check(boolean b){checks++;if(!b)throw new AssertionError("client case "+checks);}
+ static void check(boolean b,String message){checks++;if(!b)throw new AssertionError("client case "+checks+": "+message);}
  static class Resolver extends ContentResolver{
   List<String> cancels=new CopyOnWriteArrayList<>();
   List<Bundle> requests=new CopyOnWriteArrayList<>();
@@ -24,7 +25,11 @@ public final class LocalTranslationClientTest {
    check(c.lookup("中文",l).equals("中文"));check(c.lookup("a".repeat(8193),l).length()==8193);
    c.clear();settings.engine="opus";c.lookup("Engine specific",l);resolver.await(18);check(resolver.requests.get(17).getString("engine").equals("opus"));resolver.result(17,0,"OPUS 译文");settings.engine="tencent";c.clear();c.lookup("Engine specific",l);resolver.await(19);check(c.lookup("Engine specific",l).equals("Engine specific"));resolver.result(18,0,"腾讯译文");
    c.lookup("Invisible work",l);resolver.await(20);String obsolete=resolver.requests.get(19).getString("id");Handler.advance(2501);c.pruneInvisible();long cancelEnd=System.nanoTime()+TimeUnit.SECONDS.toNanos(2);while(!resolver.cancels.contains(obsolete)&&System.nanoTime()<cancelEnd)Thread.sleep(2);check(resolver.cancels.contains(obsolete));c.lookup("Invisible work",l);resolver.await(21);check(!obsolete.equals(resolver.requests.get(20).getString("id")));resolver.result(19,0,"过期译文");check(c.lookup("Invisible work",l).equals("Invisible work"));resolver.result(20,0,"当前译文");check(c.lookup("Invisible work",l).equals("当前译文"));
-   c.clear();check(Handler.queued()==0);long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(2);while(ContentProviderClient.active.get()>0&&System.nanoTime()<end)Thread.sleep(2);check(ContentProviderClient.active.get()==0);check(TranslationLease.active.get()==0);
+   c.clear();check(Handler.queued()==0,"scheduled callbacks remain");
+   // IPC cleanup closes the provider before releasing the bound service lease.
+   // Wait for both resources; observing the first close does not imply the second has run.
+   long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(2);while((ContentProviderClient.active.get()>0||TranslationLease.active.get()>0)&&System.nanoTime()<end)Thread.sleep(2);
+   check(ContentProviderClient.active.get()==0,"provider still active");check(TranslationLease.active.get()==0,"bound lease still active");
    schedulingRegression();
    System.out.println("LocalTranslationClient: "+checks+" assertions passed (offline path, fake Android transport)");
   }finally{c.close();}

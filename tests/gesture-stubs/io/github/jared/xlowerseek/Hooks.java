@@ -1,0 +1,1 @@
+package io.github.jared.xlowerseek; final class Hooks {static int cancels; static void findAndHookMethod(String n,ClassLoader l,String m,Object... args){} static Object invokeOriginalMethod(java.lang.reflect.Member m,Object o,Object[] a){if(((android.view.MotionEvent)a[0]).getActionMasked()==3)cancels++;return true;}}
