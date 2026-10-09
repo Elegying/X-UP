@@ -24,7 +24,7 @@ jobs:
           java-version: '17'
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
       - name: Prepare Android SDK
-        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "ndk;28.2.13676358" "cmake;3.22.1"'
       - name: Prepare verified native sources
         run: |
           ./scripts/prepare-native.sh
