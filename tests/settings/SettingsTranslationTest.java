@@ -27,9 +27,12 @@ public final class SettingsTranslationTest {
                 protected void onReceiveResult(int code, Bundle data) { result.set(code); }
             });
     }
-    private static void stopWorker() throws Exception {
+    private static ExecutorService worker() throws Exception {
         var field = LocalTranslationService.class.getDeclaredField("worker"); field.setAccessible(true);
-        ExecutorService worker = (ExecutorService) field.get(null);
+        return (ExecutorService) field.get(null);
+    }
+    private static void stopWorker() throws Exception {
+        ExecutorService worker = worker();
         worker.shutdownNow(); worker.awaitTermination(2, TimeUnit.SECONDS);
     }
 
@@ -52,6 +55,10 @@ public final class SettingsTranslationTest {
             check(SettingsStore.save(app, 5, false, false), "total switch saved");
             check(!SettingsStore.translate(app), "total switch disabled locally");
             if (connected) check(!remote.getBoolean(SettingsStore.TRANSLATE, true), "total switch synced");
+            check(Handler.drainOne(), "total switch notification dispatched");
+            // Finish the cancelled job before the main thread dispatches engine release.
+            // This ordering must not replace immediate release with the idle grace period.
+            worker().submit(() -> {}).get(2, TimeUnit.SECONDS);
             boolean stopped = until(() -> LocalModels.cancels.get() == 1 && LocalModels.closes.get() == 1);
             System.out.println("Total switch " + (connected ? "connected" : "offline") +
                 ": cancelled=" + LocalModels.cancels.get() + " closed=" + LocalModels.closes.get() +

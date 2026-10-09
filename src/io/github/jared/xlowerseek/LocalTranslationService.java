@@ -53,7 +53,9 @@ final class LocalTranslationService {
  }
  static void settingsChanged(Context c){
   if(c==null)return;LocalEngine choice=SettingsStore.engine(c);long revision=LocalModels.revision(c);boolean enabled=SettingsStore.translate(c)&&SettingsStore.feature(c,Feature.LOCAL_TEXT);
-  synchronized(LocalTranslationService.class){for(Job job:new ArrayList<>(jobs.values()))if(!enabled||job.choice!=choice||job.revision!=revision){job.cancelled.cancel();worker.remove(job);if(active==job&&engine!=null)engine.cancel();complete(job,2,null);}if(enabled&&!visibleClients.isEmpty())warm(c.getApplicationContext());else if(!enabled){visibleClients.clear();main.removeCallbacks(releaseIdle);main.post(releaseIdle);}}
+  synchronized(LocalTranslationService.class){for(Job job:new ArrayList<>(jobs.values()))if(!enabled||job.choice!=choice||job.revision!=revision){job.cancelled.cancel();worker.remove(job);if(active==job&&engine!=null)engine.cancel();complete(job,2,null);}if(enabled&&!visibleClients.isEmpty())warm(c.getApplicationContext());else if(!enabled){visibleClients.clear();
+   // A cancelled job may finish before releaseIdle runs; keep release due immediately.
+   releaseAt=SystemClock.uptimeMillis();main.removeCallbacks(releaseIdle);main.post(releaseIdle);}}
  }
  private static final class Job implements Runnable {
   final Context app;final LocalEngine choice;final long revision,enqueued=SystemClock.elapsedRealtime();final String key,text,background;
