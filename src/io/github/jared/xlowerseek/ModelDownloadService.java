@@ -2,7 +2,7 @@ package io.github.jared.xlowerseek;
 import android.app.*;import android.content.*;import android.os.*;import java.io.File;import java.net.URL;import java.util.concurrent.atomic.AtomicBoolean;
 public final class ModelDownloadService extends Service {
  private static final String CHANNEL="model_download";private static final int NOTICE=46;
- static volatile boolean running,verifying;static volatile long received,total=LocalModelSpec.BYTES;static volatile String status="";static volatile LocalEngine downloadingEngine=LocalEngine.TENCENT;
+ static volatile boolean running,verifying;static volatile long received,total;static volatile String status="";static volatile LocalEngine downloadingEngine=LocalEngine.DEFAULT;
  private static long sequence;private long token;private boolean destroyed,finished;private final Handler main=new Handler(Looper.getMainLooper());
  private final AtomicBoolean pause=new AtomicBoolean();private long lastUpdate;
  public IBinder onBind(Intent i){return null;}

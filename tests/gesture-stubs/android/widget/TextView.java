@@ -1,0 +1,1 @@
+package android.widget; public class TextView extends android.view.View { public TextView(android.content.Context c){} public void setTextColor(int c){} public void setTextSize(float s){} public void setBackgroundColor(int c){} public void setPadding(int a,int b,int c,int d){} public void setText(CharSequence s){} }

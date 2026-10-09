@@ -1,0 +1,35 @@
+name: Android checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+      - name: Prepare Android SDK
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
+      - name: Prepare verified native sources
+        run: |
+          ./scripts/prepare-native.sh
+          python3 scripts/prepare-opus-native.py
+      - name: Core and lifecycle regressions
+        run: bash test.sh
+      - name: Unit tests, lint and complete Debug APK
+        run: ./gradlew testDebugUnitTest lintRelease assembleDebug --no-daemon --console=plain

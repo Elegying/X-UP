@@ -1,0 +1,1 @@
+package android.app;import android.content.*;public class PendingIntent {public static final int FLAG_UPDATE_CURRENT=1,FLAG_IMMUTABLE=2;public static Intent lastCancel;public static PendingIntent getActivity(Context c,int n,Intent i,int f){return new PendingIntent();}public static PendingIntent getService(Context c,int n,Intent i,int f){lastCancel=i;return new PendingIntent();}}

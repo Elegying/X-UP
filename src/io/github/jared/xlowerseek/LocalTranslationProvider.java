@@ -7,6 +7,9 @@ public final class LocalTranslationProvider extends ContentProvider {
  private boolean allowed(){int uid=Binder.getCallingUid();if(uid==android.os.Process.myUid())return true;String[] packages=getContext().getPackageManager().getPackagesForUid(uid);if(packages!=null)for(String p:packages)if("com.twitter.android".equals(p))return true;return false;}
  public Bundle call(String method,String arg,Bundle extras){
   if(!allowed())throw new SecurityException("Caller not allowed");Bundle out=new Bundle();
+  if("video.prepare".equals(method))return VideoDownloads.prepare(getContext(),arg);
+  if("video.status".equals(method))return VideoDownloads.status(getContext());
+  if("video.cancel".equals(method))return VideoDownloads.cancel(getContext(),arg);
   if("foreground".equals(method)){if(arg!=null&&arg.length()<=128&&extras!=null)LocalTranslationService.foreground(getContext(),Binder.getCallingUid(),arg,extras.getBoolean("visible",false));return out;}
   if("cancel".equals(method)){if(arg!=null&&arg.length()<=128)LocalTranslationService.cancel(Binder.getCallingUid(),arg);return out;}
   if("status".equals(method)){out.putString("status",LocalTranslationService.status());out.putBoolean("ready",LocalModels.ready(getContext(),SettingsStore.engine(getContext())));return out;}

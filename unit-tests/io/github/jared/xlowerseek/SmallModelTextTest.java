@@ -5,7 +5,8 @@ public class SmallModelTextTest {
  @Test public void eachSentenceAndAnchorUsesItsOwnLanguage()throws Exception{List<Boolean> seen=new ArrayList<>();SmallModelText.translate("今日は⟪X0⟫nice!",(s,ja)->{seen.add(ja);return "中文";},new TranslationCancellation());assertEquals(Arrays.asList(true,false),seen);}
  @Test public void cancellationStopsLaterSentences()throws Exception{TranslationCancellation c=new TranslationCancellation();int[] calls={0};try{SmallModelText.translate("First. Second.",(s,ja)->{calls[0]++;c.cancel();return "中文";},c);fail();}catch(InterruptedException expected){}assertEquals(1,calls[0]);}
  @Test public void chineseAndEmptyRemainUntouched()throws Exception{assertEquals("中文\n  ",SmallModelText.translate("中文\n  ",(s,ja)->{throw new AssertionError();},new TranslationCancellation()));}
- @Test public void invalidEngineRetainsTencentDefault(){assertEquals(LocalEngine.TENCENT,LocalEngine.parse(null));assertEquals(LocalEngine.TENCENT,LocalEngine.parse("unknown"));assertEquals(LocalEngine.OPUS,LocalEngine.parse("opus"));}
+ @Test public void missingOrInvalidEngineUsesGoogleDefault(){assertEquals(LocalEngine.MLKIT,LocalEngine.parse(null));assertEquals(LocalEngine.MLKIT,LocalEngine.parse("unknown"));assertEquals(LocalEngine.MLKIT,LocalEngine.parse(""));}
+ @Test public void savedEngineSelectionsArePreserved(){for(LocalEngine engine:LocalEngine.values())assertEquals(engine,LocalEngine.parse(engine.id));}
 
  @Test public void chineseWithLatinLetterNeverReachesEnglishModel()throws Exception{
   String source="这是中文，看着跟傻B一样😂\n电脑 GPU 和 AI 都正常。";

@@ -64,7 +64,7 @@ public final class SettingsStore {
         changed();
     }
     public static synchronized boolean feature(Context context,Feature feature){SharedPreferences p=prefs(context);if(feature==Feature.NATIVE_TRANSLATE||feature==Feature.LOCAL_TEXT)return TranslationMode.enabled(p.getInt(TranslationMode.KEY,TranslationMode.LOCAL),feature);return p.getBoolean(feature.key,true);}
-    static synchronized LocalEngine engine(Context c){return LocalEngine.parse(prefs(c).getString(LocalEngine.KEY,LocalEngine.TENCENT.id));}
+    static synchronized LocalEngine engine(Context c){return LocalEngine.parse(prefs(c).getString(LocalEngine.KEY,LocalEngine.DEFAULT.id));}
     static synchronized boolean setEngine(Context c,LocalEngine engine){
         prefs(c);if(!local.edit().putString(LocalEngine.KEY,engine.id).putBoolean(DIRTY,true).commit())return false;
         if(remote!=null)try{if(!copyFeatures(local,remote))throw new IllegalStateException();local.edit().putBoolean(DIRTY,false).commit();}catch(RuntimeException e){remote=null;}
@@ -72,7 +72,7 @@ public final class SettingsStore {
     }
     private static boolean copyFeatures(SharedPreferences from,SharedPreferences to){
         int mode=TranslationMode.normalize(from.getInt(TranslationMode.KEY,TranslationMode.LOCAL));
-        SharedPreferences.Editor edit=to.edit().putInt(TranslationMode.KEY,mode).putString(LocalEngine.KEY,LocalEngine.parse(from.getString(LocalEngine.KEY,LocalEngine.TENCENT.id)).id);for(Feature f:Feature.values())edit.putBoolean(f.key,f==Feature.NATIVE_TRANSLATE||f==Feature.LOCAL_TEXT?TranslationMode.enabled(mode,f):from.getBoolean(f.key,true));return edit.commit();
+        SharedPreferences.Editor edit=to.edit().putInt(TranslationMode.KEY,mode).putString(LocalEngine.KEY,LocalEngine.parse(from.getString(LocalEngine.KEY,LocalEngine.DEFAULT.id)).id);for(Feature f:Feature.values())edit.putBoolean(f.key,f==Feature.NATIVE_TRANSLATE||f==Feature.LOCAL_TEXT?TranslationMode.enabled(mode,f):from.getBoolean(f.key,true));return edit.commit();
     }
     static synchronized boolean setFeature(Context context,Feature feature,boolean enabled){
         prefs(context);SharedPreferences.Editor edit=local.edit().putBoolean(feature.key,enabled).putBoolean(DIRTY,true);
@@ -95,6 +95,7 @@ public final class SettingsStore {
             if(!write(remote,seconds,latest,translate,false))throw new IllegalStateException("Remote commit failed");
             local.edit().putBoolean(DIRTY,false).commit();
         }catch(RuntimeException e){remote=null;android.util.Log.w("XLowerSeek","Settings saved locally; waiting for service");}
+        changed();
         return true;
     }
 }

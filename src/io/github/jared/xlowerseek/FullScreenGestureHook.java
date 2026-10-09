@@ -40,11 +40,14 @@ final class FullScreenGestureHook {
             float density=root.getResources().getDisplayMetrics().density;
             int[] location=new int[2];root.getLocationOnScreen(location);
             float localX=e.getRawX()-location[0],localY=e.getRawY()-location[1];
+            WindowInsets windowInsets=root.getRootWindowInsets();
+            android.graphics.Insets insets=windowInsets==null?android.graphics.Insets.NONE:
+                    windowInsets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout()|WindowInsets.Type.systemGestures());
             // Leave system edges, toolbar, native timeline and bottom actions untouched.
-            if(!r.contains((int)e.getRawX(),(int)e.getRawY())
-                    ||localX<24*density||localX>root.getWidth()-24*density
-                    ||localY<140*density||localY>root.getHeight()-180*density
-                    ||e.getRawY()>r.bottom-32*density)return false;
+            if(!r.contains((int)localX,(int)localY)
+                    ||!GestureArea.contains(root.getWidth(),root.getHeight(),density,localX,localY,
+                            insets.left,insets.top,insets.right,insets.bottom)
+                    ||localY>r.bottom-32*density)return false;
             long total=((Number)Reflect.callMethod(active,"getDuration")).longValue();
             if(total<=0||Boolean.TRUE.equals(Reflect.callMethod(active,"g")))return false;
             player=active;decor=root;dispatch=method;down=MotionEvent.obtain(e);
@@ -98,6 +101,8 @@ final class FullScreenGestureHook {
         }catch(Throwable e){reset();}
     }
     void reset(){
+        // Once X receives CANCEL, consume the remainder even if settings or reflection fail.
+        ignoreStream=ignoreStream||cancelled;
         handler.removeCallbacks(hold);
         if(originalSpeed!=null&&player!=null)try{
             Reflect.callMethod(player,"c",originalSpeed);

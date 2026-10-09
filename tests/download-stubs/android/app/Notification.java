@@ -1,0 +1,4 @@
+package android.app;public class Notification {
+ public static class Builder {public Builder(android.content.Context c,String channel){}public Builder setSmallIcon(int icon){return this;}public Builder setContentTitle(CharSequence s){return this;}public Builder setContentText(CharSequence s){return this;}public Builder setOnlyAlertOnce(boolean v){return this;}public Builder setOngoing(boolean v){return this;}public Builder setProgress(int m,int p,boolean i){return this;}public Builder addAction(Action a){return this;}public Builder setContentIntent(PendingIntent p){return this;}public Notification build(){return new Notification();}}
+ public static class Action {public static class Builder {public Builder(Object icon,CharSequence label,PendingIntent p){}public Action build(){return new Action();}}}
+}
