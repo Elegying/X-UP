@@ -1,6 +1,6 @@
 # X-UP
 
-面向 X（原 Twitter）的 LSPosed 模块，使用现代 Xposed API 102。当前开发版：1.8.0-beta8。
+面向 X（原 Twitter）的 LSPosed 模块，使用现代 Xposed API 102。当前开发版：1.8.0-beta9。
 
 ## 功能
 
@@ -11,6 +11,7 @@
 - 默认开启去广告：过滤统一时间线中的推广帖、推广用户、推广趋势与图片广告，可独立关闭。
 - 三种本地引擎可选：Google ML Kit（默认）、腾讯 HY-MT2、OPUS-MT。一次只运行所选引擎，X 原生自动翻译为互斥的联网备用。
 - 本地中文翻译：英语、日语、帖子、评论、引用及可识别的简介和私信文字；腾讯引擎可参考已加载的直接上级内容。
+- Google 本地翻译直接替换可翻译文字，X 页面不叠加右下角悬浮提示。
 - 用户名、昵称与 @账号保留原文，简介和正文仍按所选引擎翻译。
 - 模块 → 检查更新：检查 GitHub 版本、选择是否接收测试版、后台下载、校验并启动系统安装。
 - 每项功能独立开关，设置通过 LSPosed 服务同步。
@@ -91,4 +92,4 @@ OPUS 依赖的固定提交见 `scripts/opus-native-lock.json`，Android 兼容�
 
 ## 第三方许可
 
-腾讯与 Helsinki-NLP OPUS 模型使用 Apache-2.0 许可证。llama.cpp、CTranslate2 使用 MIT 许可；SentencePiece 与其他依赖条款见 `licenses`。Google ML Kit 使用其 SDK 条款，选择该引擎时由 [Google Translate](https://cloud.google.com/translate) 提供离线翻译，并显示其标识；遵循 [ML Kit 使用要求](https://developers.google.com/ml-kit/language/translation/translation-terms)。APK“第三方许可”页面包含完整条款。X-UP 由 Elegying 项目维护，与 X 或腾讯无隶属关系。
+腾讯与 Helsinki-NLP OPUS 模型使用 Apache-2.0 许可证。llama.cpp、CTranslate2 使用 MIT 许可；SentencePiece 与其他依赖条款见 `licenses`。Google ML Kit 使用其 SDK 条款，选择该引擎时由 [Google Translate](https://cloud.google.com/translate) 提供离线翻译，模块的模型测试页显示其标识；使用要求见 [ML Kit 说明](https://developers.google.com/ml-kit/language/translation/translation-terms)。APK“第三方许可”页面包含完整条款。X-UP 由 Elegying 项目维护，与 X 或腾讯无隶属关系。
