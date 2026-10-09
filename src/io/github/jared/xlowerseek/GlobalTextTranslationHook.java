@@ -11,7 +11,6 @@ import java.util.*;
 
 /** Local translation of display text. Input, URLs and interactive annotation ranges stay intact. */
 final class GlobalTextTranslationHook {
-    private final GoogleAttribution attribution=new GoogleAttribution();private WeakReference<Activity> currentActivity=new WeakReference<>(null);
     private final RemoteSettings settings;
     private final LocalTranslationClient client;
     private final Handler main=new Handler(Looper.getMainLooper());
@@ -55,8 +54,8 @@ final class GlobalTextTranslationHook {
         }
         hook.textViews();
         app.registerActivityLifecycleCallbacks(new Application.ActivityLifecycleCallbacks(){
-            public void onActivityResumed(Activity a){hook.resumed++;hook.currentActivity=new WeakReference<>(a);hook.client.setForeground(true);hook.updateSettings();hook.main.removeCallbacks(hook.visibilityTick);hook.main.post(hook.visibilityTick);hook.invalidate();}
-            public void onActivityPaused(Activity a){hook.attribution.clear();if(hook.currentActivity.get()==a)hook.currentActivity.clear();hook.resumed=Math.max(0,hook.resumed-1);hook.client.setForeground(hook.resumed>0);hook.main.postDelayed(()->{if(hook.resumed==0){hook.client.suspend();hook.main.removeCallbacks(hook.visibilityTick);}},1000);}
+            public void onActivityResumed(Activity a){hook.resumed++;hook.client.setForeground(true);hook.updateSettings();hook.main.removeCallbacks(hook.visibilityTick);hook.main.post(hook.visibilityTick);hook.invalidate();}
+            public void onActivityPaused(Activity a){hook.resumed=Math.max(0,hook.resumed-1);hook.client.setForeground(hook.resumed>0);hook.main.postDelayed(()->{if(hook.resumed==0){hook.client.suspend();hook.main.removeCallbacks(hook.visibilityTick);}},1000);}
             public void onActivityCreated(Activity a,Bundle b){} public void onActivityStarted(Activity a){}
             public void onActivityStopped(Activity a){} public void onActivityDestroyed(Activity a){}
             public void onActivitySaveInstanceState(Activity a,Bundle b){}
@@ -80,7 +79,6 @@ final class GlobalTextTranslationHook {
         for(WeakReference<ViewBinding> ref:new ArrayList<>(views.values())){ViewBinding binding=ref.get();if(binding!=null&&binding.waiting)binding.changed();}
     }
     private void invalidate(){
-        attribution.update(currentActivity.get(),resumed>0&&settings.translate&&settings.feature(Feature.LOCAL_TEXT)&&settings.engine.equals("mlkit"));
         for(Observer observer:new ArrayList<>(observers.values()))observer.changed();
         for(WeakReference<ViewBinding> ref:new ArrayList<>(views.values())){ViewBinding binding=ref.get();if(binding!=null)binding.changed();}
     }
