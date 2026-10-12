@@ -5,12 +5,35 @@ import android.os.Bundle;
 import android.widget.*;
 
 public final class ModuleStatusActivity extends Activity {
-    @Override public void onCreate(Bundle state){
-        super.onCreate(state);SettingsUi ui=new SettingsUi(this,"状态与帮助","检查配置连接和 X 版本",true);
+    private final android.os.Handler main=new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable refresh=this::render;
+    private final android.content.SharedPreferences.OnSharedPreferenceChangeListener changed=(prefs,key)->{
+        main.removeCallbacks(refresh);main.post(refresh);
+    };
+    @Override public void onCreate(Bundle state){super.onCreate(state);}
+    @Override protected void onResume(){
+        super.onResume();CompatibilityStatus.preferences(this).registerOnSharedPreferenceChangeListener(changed);render();
+    }
+    @Override protected void onPause(){
+        CompatibilityStatus.preferences(this).unregisterOnSharedPreferenceChangeListener(changed);main.removeCallbacks(refresh);super.onPause();
+    }
+    private void render(){
+        SettingsUi ui=new SettingsUi(this,"状态与帮助","检查配置连接和 X 版本",true);
         LinearLayout card=ui.section("当前环境");
         ui.info(card,"X-UP",BuildConfig.VERSION_NAME+" · Xposed API 102");
         ui.info(card,"设置服务",SettingsStore.isShared()?"已连接 LSPosed":"未连接，请检查模块是否启用。");
-        try{android.content.pm.PackageInfo x=getPackageManager().getPackageInfo("com.twitter.android",0);ui.info(card,"X 版本",x.versionName+(x.getLongVersionCode()==312310001L?" · 已适配":" · 未适配，保持原有行为"));}
+        try{
+            android.content.pm.PackageInfo x=getPackageManager().getPackageInfo("com.twitter.android",0);
+            ui.info(card,"X 版本",x.versionName+" · 自动检查兼容性");
+            android.content.SharedPreferences status=CompatibilityStatus.preferences(this);
+            LinearLayout compatibility=ui.section("最近一次 X 启动检测");
+            if(CompatibilityStatus.current(status,x)){
+                ui.info(compatibility,"检测时间",java.text.DateFormat.getDateTimeInstance().format(new java.util.Date(status.getLong("checked",0))));
+                for(java.util.Map.Entry<String,String> feature:CompatibilityStatus.FEATURES.entrySet())
+                    ui.info(compatibility,feature.getValue(),status.getBoolean(feature.getKey(),false)?"已加载":"未加载，请检查适配");
+                ui.info(compatibility,"检测说明","显示最近一次加载结果；具体功能效果以 X 内实际使用为准。未兼容的功能会单独停用。");
+            }else ui.info(compatibility,"等待检测","请完全退出并重新打开 X，再返回查看。更新 X 或 X-UP 后会重新检测。");
+        }
         catch(android.content.pm.PackageManager.NameNotFoundException e){ui.info(card,"X 版本","未安装 X");}
         ui.info(ui.section("启用步骤"),"安装或更新后","在 LSPosed 启用 X-UP 并勾选 X，然后完全退出并重新打开 X。");
         LinearLayout help=ui.section("使用说明");

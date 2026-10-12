@@ -2,15 +2,38 @@ package io.github.jared.xlowerseek;
 
 import java.lang.reflect.*;
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.List;
 import io.github.libxposed.api.XposedInterface;
 
 /** Isolates the API 102 interceptor lifecycle from version-specific X adapters. */
 final class Hooks {
     private static XposedInterface api;
+    private static final ThreadLocal<List<XposedInterface.HookHandle>> pending = new ThreadLocal<>();
+    interface Installation { void run() throws Throwable; }
+    /** Roll back a partially installed feature while preserving the other features. */
+    static int installAtomically(Installation installation) throws Throwable {
+        if (pending.get() != null) throw new IllegalStateException("Nested hook installation");
+        List<XposedInterface.HookHandle> handles = new ArrayList<>();
+        pending.set(handles);
+        try {
+            installation.run();
+            if (handles.isEmpty()) throw new IllegalStateException("No compatible hooks installed");
+            return handles.size();
+        } catch (Throwable failure) {
+            for (int i = handles.size() - 1; i >= 0; i--) {
+                try { handles.get(i).unhook(); }
+                catch (Throwable rollback) { failure.addSuppressed(rollback); }
+            }
+            throw failure;
+        } finally { pending.remove(); }
+    }
     static void initialize(XposedInterface value){api=value;}
     static void log(String message){api.log(android.util.Log.INFO,"X-UP",message);}
     static void hookMethod(Executable method,HookCallback callback){
-        api.hook(method).intercept(chain->intercept(chain,callback));
+        XposedInterface.HookHandle handle = api.hook(method).intercept(chain->intercept(chain,callback));
+        List<XposedInterface.HookHandle> handles = pending.get();
+        if (handles != null) handles.add(handle);
     }
     static Object intercept(XposedInterface.Chain chain,HookCallback callback)throws Throwable {
         Object[] args=chain.getArgs().toArray();

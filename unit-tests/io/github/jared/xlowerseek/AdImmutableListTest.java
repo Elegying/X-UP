@@ -3,7 +3,7 @@ import org.junit.Test;import static org.junit.Assert.*;import java.util.*;
 public class AdImmutableListTest {
  public static class Vector extends AbstractList<Object>{
   private final Object[] data;public Vector(Object[] data){this.data=data;}
-  public Vector b(Collection<?> values){return values.isEmpty()?this:new Vector(values.toArray());}
+  public Vector appendRenamed(Collection<?> values){return values.isEmpty()?this:new Vector(values.toArray());}
   public Object get(int i){return data[i];}public int size(){return data.length;}
  }
  @Test public void emptyResultsHaveDistinctIdentity()throws Exception{AdImmutableList f=new AdImmutableList(Vector.class);Object a=f.copy(Collections.emptyList()),b=f.copy(Collections.emptyList());assertNotSame(a,b);assertEquals(a,b);}
@@ -15,5 +15,13 @@ public class AdImmutableListTest {
  @Test public void largerListsKeepOrderAndSource()throws Exception{
   AdImmutableList f=new AdImmutableList(Vector.class);List<Integer> source=new ArrayList<>();for(int i=0;i<100;i++)source.add(i);
   Object result=f.copy(source);assertEquals(source,result);assertEquals(100,source.size());assertTrue(result instanceof Vector);
+ }
+ public static class Ambiguous extends Vector{
+  public Ambiguous(Object[] data){super(data);}
+  public List<?> first(Collection<?> values){return new ArrayList<>(values);}
+  public List<?> second(Collection<?> values){return new ArrayList<>(values);}
+ }
+ @Test public void ambiguousAppendNeverChoosesFirstCandidate()throws Exception{
+  try{new AdImmutableList(Ambiguous.class);fail();}catch(NoSuchMethodException expected){}
  }
 }

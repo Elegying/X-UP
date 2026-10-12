@@ -3,23 +3,30 @@ package io.github.jared.xlowerseek;
 import android.os.*;
 import java.lang.reflect.*;
 import java.util.*;
+import org.luckypray.dexkit.query.matchers.ClassMatcher;
+import org.luckypray.dexkit.query.matchers.MethodMatcher;
+import org.luckypray.dexkit.query.enums.StringMatchType;
 
 /** Filter the common URT list boundary, while X retains layout, pagination and click handling. */
 final class AdBlockHook {
-    static void install(ClassLoader loader,RemoteSettings settings)throws Exception {
-        AdTimelineFilter filter=new AdTimelineFilter(loader);
-        Class<?> immutable=Reflect.findClass("kotlinx.collections.immutable.b",loader);
-        Class<?> vector=Reflect.findClass("kotlinx.collections.immutable.implementations.immutableList.h",loader);
+    static void install(TargetResolver resolver,RemoteSettings settings)throws Exception {
+        AdTimelineFilter filter=new AdTimelineFilter(new ContentTargets.Ads(resolver));
+        Class<?> vector=resolver.type("ads.smallImmutableList",ClassMatcher.create()
+            .className("kotlinx.collections.immutable.implementations.immutableList.",StringMatchType.StartsWith)
+            .addMethod(MethodMatcher.create().name("<init>").paramTypes(Object[].class)),
+            type->List.class.isAssignableFrom(type));
         AdImmutableList lists=new AdImmutableList(vector);
         AdPresentation presentation=new AdPresentation(source->{List<?> out=filter.filter((List<?>)source);return out==source?source:lists.copy(out);});
-        Class<?> ui=Reflect.findClass("com.x.urt.ui.b",loader);
-        Method render=null;int composer=-1;
-        for(Method m:ui.getDeclaredMethods()){
-            Class<?>[] p=m.getParameterTypes();
-            if(m.getName().equals("f")&&p.length==26&&p[0]==immutable&&p[22].getName().equals("androidx.compose.runtime.Composer")&&m.getReturnType()==void.class){render=m;composer=22;break;}
-        }
-        if(render==null)throw new NoSuchMethodException("URT timeline render");
-        Method mutable=Reflect.findMethodExact(Reflect.findClass("androidx.compose.runtime.i",loader),"r",Object.class);
+        Class<?> ui=resolver.type("ads.timelineUi",ClassMatcher.create().usingEqStrings(" module=","(entryId=",", sortIndex="));
+        Method render=resolver.method("ads.timelineRender",MethodMatcher.create().declaredClass(ui).returnType(void.class),method->{
+            Class<?>[] p=method.getParameterTypes();int index=p.length-4;
+            return Modifier.isStatic(method.getModifiers())&&p.length>8&&List.class.isAssignableFrom(p[0])
+                &&p[1].isEnum()&&p[2]==boolean.class&&p[3]==boolean.class
+                &&p[index].getName().equals("androidx.compose.runtime.Composer")
+                &&p[index+1]==int.class&&p[index+2]==int.class&&p[index+3]==int.class;
+        });
+        int composer=render.getParameterCount()-4;
+        Method mutable=ComposeTargets.mutableState(resolver);
         Object revision=mutable.invoke(null,0);Handler main=new Handler(Looper.getMainLooper());
         boolean[] enabled={settings.feature(Feature.AD_BLOCK)};int[] version={0};
         settings.addListener(()->main.post(()->{boolean next=settings.feature(Feature.AD_BLOCK);if(next!=enabled[0]){enabled[0]=next;Reflect.callMethod(revision,"setValue",++version[0]);}}));

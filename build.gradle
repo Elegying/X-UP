@@ -6,8 +6,8 @@ android {
         applicationId 'io.github.jared.xlowerseek'
         minSdk 30
         targetSdk 36
-        versionCode 28
-        versionName '1.8.0-beta9'
+        versionCode 29
+        versionName '1.8.0-beta10'
         externalNativeBuild { cmake { arguments '-DANDROID_STL=c++_shared'; targets 'xup_translation', 'xup_opus' } }
         ndk { abiFilters 'arm64-v8a', 'x86_64' }
     }
@@ -37,6 +37,7 @@ android {
     packaging { resources { excludes += ['META-INF/DEPENDENCIES', 'META-INF/LICENSE', 'META-INF/NOTICE'] } }
 }
 dependencies {
+    implementation "org.luckypray:dexkit:2.3.0"
     implementation "com.google.mlkit:translate:17.0.3"
     testImplementation "junit:junit:4.13.2"
     testImplementation "org.json:json:20240303"

@@ -15,6 +15,7 @@ final class GlobalTextTranslationHook {
     private final LocalTranslationClient client;
     private final Handler main=new Handler(Looper.getMainLooper());
     private final Class<?> annotated,range;
+    private final ComposeTargets targets;
     private final Method mutableState;
     private final LinkedHashMap<String,Observer> observers=new LinkedHashMap<>(16,.75f,true);
     private static final int BINDING_TAG=0x7e585550;
@@ -28,24 +29,23 @@ final class GlobalTextTranslationHook {
     private String engine="";
     private final Runnable visibilityTick=new Runnable(){public void run(){if(resumed>0){refreshPending();main.postDelayed(()->client.pruneInvisible(),250);main.postDelayed(this,1000);}}};
     private long retry;private long revision=-1;private boolean localEnabled,contextEnabled;
-    private GlobalTextTranslationHook(Application app,ClassLoader loader,RemoteSettings settings){
+    private GlobalTextTranslationHook(Application app,TargetResolver resolver,RemoteSettings settings)throws ReflectiveOperationException{
         this.settings=settings;enabled=settings.translate;client=new LocalTranslationClient(app,settings);
-        annotated=Reflect.findClass("androidx.compose.ui.text.h",loader);
-        range=Reflect.findClass("androidx.compose.ui.text.f",loader);
-        mutableState=Reflect.findMethodExact(Reflect.findClass("androidx.compose.runtime.i",loader),"r",Object.class);
+        targets=new ComposeTargets(resolver);
+        annotated=targets.annotated;range=targets.range;mutableState=targets.mutableState;
     }
     private final class Observer implements LocalTranslationClient.Listener {
         final Object state;int version;
         Observer()throws ReflectiveOperationException{state=mutableState.invoke(null,0);}
         public void changed(){Reflect.callMethod(state,"setValue",++version);}
     }
-    static void install(Application app,ClassLoader loader,RemoteSettings settings){
-        GlobalTextTranslationHook hook=new GlobalTextTranslationHook(app,loader,settings);
+    static void install(Application app,TargetResolver resolver,RemoteSettings settings)throws ReflectiveOperationException{
+        GlobalTextTranslationHook hook=new GlobalTextTranslationHook(app,resolver,settings);
         // The X wrapper handles rich-text hit testing, so translate before it captures the text.
-        hook.compose(Reflect.findClass("com.x.ui.common.ports.text.f",loader),new String[]{"a","b","d"});
+        hook.compose(hook.targets.textWrapper,false);
         // Foundation BasicText only; editable BasicTextField is explicitly excluded below.
-        hook.compose(Reflect.findClass("androidx.compose.foundation.text.e1",loader),new String[]{"b","c"});
-        Class<?> inputs=Reflect.findClass("androidx.compose.foundation.text.k0",loader);
+        hook.compose(hook.targets.basicText,true);
+        Class<?> inputs=hook.targets.inputs;
         for(Method m:inputs.getDeclaredMethods())if(m.getReturnType()==void.class&&hasComposer(m)){
             Hooks.hookMethod(m,new HookCallback(){
                 protected void beforeHookedMethod(HookParam p){if(Looper.myLooper()==Looper.getMainLooper()){hook.depth++;hook.entered.add(p);}}
@@ -83,11 +83,12 @@ final class GlobalTextTranslationHook {
         for(WeakReference<ViewBinding> ref:new ArrayList<>(views.values())){ViewBinding binding=ref.get();if(binding!=null)binding.changed();}
     }
     private static boolean hasComposer(Method m){for(Class<?> c:m.getParameterTypes())if(c.getName().equals("androidx.compose.runtime.Composer"))return true;return false;}
-    private void compose(Class<?> type,String[] names){
+    private void compose(Class<?> type,boolean foundation){
+        int count=0;
         for(Method method:type.getDeclaredMethods()){
-            if(!Arrays.asList(names).contains(method.getName())||!hasComposer(method))continue;
+            if(!ComposeTargets.isDisplayMethod(method,annotated,foundation))continue;
             Class<?>[] parameters=method.getParameterTypes();
-            if(parameters[0]!=String.class&&parameters[0]!=annotated)continue;
+            count++;
             int position=-1;for(int i=0;i<parameters.length;i++)if(parameters[i].getName().equals("androidx.compose.runtime.Composer"))position=i;
             final int composer=position;
             Hooks.hookMethod(method,new HookCallback(){
@@ -119,22 +120,23 @@ final class GlobalTextTranslationHook {
                 @Override protected void afterHookedMethod(HookParam p){if(Looper.myLooper()==Looper.getMainLooper()&&entered.remove(p))depth--;}
             });
         }
+        if(count==0)throw new IllegalStateException("No display-text target");
     }
-    private Object translateCompose(CharSequence source,Observer observer){
+    private Object translateCompose(CharSequence source,Observer observer)throws ReflectiveOperationException{
         if(source instanceof String)return translatePlain(source.toString(),Collections.emptyList(),observer).text;
-        List<?> annotations=(List<?>)Reflect.getObjectField(source,"a");
+        List<?> annotations=(List<?>)targets.annotations.get(source);
         List<TextTranslationPlan.Range> ranges=new ArrayList<>();
         if(annotations!=null)for(Object item:annotations){
-            String payload=Reflect.getObjectField(item,"a").getClass().getName();
-            boolean protect=!payload.equals("androidx.compose.ui.text.s0")&&!payload.equals("androidx.compose.ui.text.f0");
-            ranges.add(new TextTranslationPlan.Range(Reflect.getIntField(item,"b"),Reflect.getIntField(item,"c"),protect));
+            Object payload=targets.rangeItem.get(item);
+            boolean protect=!targets.spanStyle.isInstance(payload)&&!targets.paragraphStyle.isInstance(payload);
+            ranges.add(new TextTranslationPlan.Range(targets.rangeStart.getInt(item),targets.rangeEnd.getInt(item),protect));
         }
         TextTranslationPlan.Result result=translatePlain(source.toString(),ranges,observer);
         if(result.text.equals(source.toString()))return source;
         List<Object> mapped=new ArrayList<>();
-        if(annotations!=null)for(Object item:annotations)mapped.add(Reflect.newInstance(range,
-            Reflect.getObjectField(item,"d"),result.offset(Reflect.getIntField(item,"b")),result.offset(Reflect.getIntField(item,"c")),Reflect.getObjectField(item,"a")));
-        return Reflect.newInstance(annotated,mapped,result.text);
+        if(annotations!=null)for(Object item:annotations)mapped.add(targets.makeRange.newInstance(
+            targets.rangeTag.get(item),result.offset(targets.rangeStart.getInt(item)),result.offset(targets.rangeEnd.getInt(item)),targets.rangeItem.get(item)));
+        return targets.makeAnnotated.newInstance(mapped,result.text);
     }
     private TextTranslationPlan.Result translatePlain(String text,List<TextTranslationPlan.Range> ranges,LocalTranslationClient.Listener listener){
         WholeTextPlan plan=new WholeTextPlan(text,ranges);

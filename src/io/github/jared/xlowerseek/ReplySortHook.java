@@ -3,20 +3,40 @@ package io.github.jared.xlowerseek;
 import android.os.*;
 import android.util.Log;
 import java.lang.ref.WeakReference;
+import java.lang.reflect.*;
 import java.util.*;
+import org.luckypray.dexkit.query.enums.StringMatchType;
+import org.luckypray.dexkit.query.enums.UsingType;
+import org.luckypray.dexkit.query.matchers.*;
 
-/** Defaults new threads to latest, and uses X's own selection action for live setting changes. */
+/** Defaults new threads to latest; host selection/state is reused for a live switch. */
 final class ReplySortHook {
-    static void install(ClassLoader loader,RemoteSettings settings)throws Exception{
-        Class<?> sort=Reflect.findClass("com.x.models.ff",loader);
-        Object recency=Reflect.getStaticObjectField(sort,"Recency"),relevance=Reflect.getStaticObjectField(sort,"Relevance");
-        Class<?> repository=Reflect.findClass("com.x.repositories.post.t",loader);
+    static void install(TargetResolver resolver,RemoteSettings settings)throws Exception {
+        Class<?> sort=resolver.type("replies.sort",ClassMatcher.create().usingEqStrings("Recency","Relevance","Likes"),Class::isEnum);
+        Object recency=sort.getField("Recency").get(null),relevance=sort.getField("Relevance").get(null);
+        Method initializer=resolver.method("replies.stateInitializer",MethodMatcher.create().name("invoke").paramCount(0).returnType(Object.class)
+            .addUsingField(new UsingFieldMatcher(sort.getField("Relevance"),UsingType.Read)),
+            method->!Modifier.isStatic(method.getModifiers()));
+        Method render=resolver.method("replies.sortRender",MethodMatcher.create().returnType(void.class)
+            .paramTypes("int","androidx.compose.runtime.Composer","androidx.compose.ui.Modifier","java.lang.String",
+                "kotlin.jvm.functions.Function0","kotlin.jvm.functions.Function1","boolean")
+            .addInvoke(MethodMatcher.create().declaredClass(initializer.getDeclaringClass()).name("<init>")),
+            method->Modifier.isStatic(method.getModifiers()));
+        Class<?> repository=resolver.type("replies.repository",ClassMatcher.create()
+            .className("com.x.repositories.post.",StringMatchType.StartsWith)
+            .addMethod(MethodMatcher.create().name("<init>").paramCount(6)),type->{
+                for(Constructor<?> c:type.getDeclaredConstructors()){
+                    Class<?>[] p=c.getParameterTypes();if(p.length==6&&p[2]==long.class&&p[3]==sort)return true;
+                }return false;
+            });
+        Class<?> stateType=ComposeTargets.mutableState(resolver).getReturnType();
+        Method read=Reflect.findMethodExact(stateType,"getValue");
         Handler main=new Handler(Looper.getMainLooper());
         ThreadLocal<Object> rendering=new ThreadLocal<>();
         Map<Object,WeakReference<Object>> states=Collections.synchronizedMap(new WeakHashMap<>());
         final WeakReference<?>[] active={new WeakReference<>(null)};
-        Hooks.hookAllMethods(Reflect.findClass("com.x.clock.d",loader),"g",new HookCallback(){
-            protected void beforeHookedMethod(HookParam p){if(p.args.length==7&&Looper.myLooper()==Looper.getMainLooper()){rendering.set(p.args[5]);active[0]=new WeakReference<>(p.args[5]);}}
+        Hooks.hookMethod(render,new HookCallback(){
+            protected void beforeHookedMethod(HookParam p){if(Looper.myLooper()==Looper.getMainLooper()){rendering.set(p.args[5]);active[0]=new WeakReference<>(p.args[5]);}}
             protected void afterHookedMethod(HookParam p){rendering.remove();}
         });
         Hooks.hookAllConstructors(repository,new HookCallback(){
@@ -25,16 +45,21 @@ final class ReplySortHook {
                 for(int i=0;i<p.args.length;i++)if(sort.isInstance(p.args[i])){p.args[i]=recency;Log.i("XLowerSeek","replySort initial=Recency");}
             }
         });
-        Hooks.findAndHookMethod(Reflect.findClass("com.x.ui.common.v2",loader),"invoke",new HookCallback(){
+        Hooks.hookMethod(initializer,new HookCallback(){
             protected void afterHookedMethod(HookParam p){
-                if(p.hasThrowable()||Reflect.getIntField(p.thisObject,"a")!=14)return;
-                Object action=rendering.get();if(action!=null)states.put(action,new WeakReference<>(p.getResult()));
-                if(settings.latest)Reflect.callMethod(p.getResult(),"setValue",recency);
+                if(p.hasThrowable()||rendering.get()==null||!stateType.isInstance(p.getResult()))return;
+                Object state=p.getResult();
+                // R8 may regroup this lambda; inspect its typed result instead of a case number.
+                if(Reflect.callMethod(state,"getValue")!=relevance)return;
+                states.put(rendering.get(),new WeakReference<>(state));
+                if(settings.latest)Reflect.callMethod(state,"setValue",recency);
             }
         });
-        // Saveable Compose state may be restored without running its initializer.
-        Hooks.hookAllConstructors(Reflect.findClass("androidx.compose.foundation.text.t",loader),new HookCallback(){
-            protected void afterHookedMethod(HookParam p){if(!p.hasThrowable()&&p.args.length==4&&Integer.valueOf(1).equals(p.args[3]))states.put(p.args[0],new WeakReference<>(p.args[2]));}
+        Hooks.hookMethod(read,new HookCallback(){
+            protected void afterHookedMethod(HookParam p){
+                Object action=rendering.get();
+                if(!p.hasThrowable()&&action!=null&&sort.isInstance(p.getResult()))states.put(action,new WeakReference<>(p.thisObject));
+            }
         });
         final boolean[] last={settings.latest};
         settings.addListener(()->main.post(()->{

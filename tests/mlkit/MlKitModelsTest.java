@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.ContentResolver;
 import android.os.Handler;
 import com.google.mlkit.common.model.RemoteModelManager;
+import com.google.mlkit.common.MlKitException;
 import com.google.mlkit.nl.translate.TranslateRemoteModel;
 import java.util.HashSet;
 import java.util.Set;
@@ -104,15 +105,32 @@ public final class MlKitModelsTest {
             check(!MlKitModels.ready && LocalModels.changes == 2, "missing Japanese invalidates catalog");
         });
         test("failed download remains retryable and duplicate start does not schedule again", () -> {
-            int[] finished = {0};
-            MlKitModels.download(app, () -> finished[0]++); MlKitModels.download(app, () -> { throw new AssertionError("duplicate"); });
+            int[] finished = {0}, joined = {0};
+            MlKitModels.download(app, () -> finished[0]++); MlKitModels.download(app, () -> joined[0]++);
             check(sdk.downloads.size() == 2, "duplicate download ignored");
             sdk.downloads.get(0).succeed(null); sdk.downloads.get(1).fail(new IllegalStateException("network")); Handler.drain();
             check(!MlKitModels.ready && !MlKitModels.downloading && finished[0] == 1, "failure releases active state");
+            check(joined[0] == 1, "a recreated foreground service receives the existing task completion");
             check(MlKitModels.status.contains("下载失败") && LocalModels.changes == 0, "failure not advertised as ready");
             MlKitModels.download(app, () -> finished[0]++);
             sdk.downloads.get(2).succeed(null); sdk.downloads.get(3).succeed(null); Handler.drain();
             check(MlKitModels.ready && finished[0] == 2 && LocalModels.changes == 1, "retry publishes successful model state");
+        });
+        test("model verification failure keeps SDK cause instead of blaming network", () -> {
+            MlKitModels.download(app, () -> {});
+            sdk.downloads.get(0).succeed(null);
+            sdk.downloads.get(1).fail(new java.util.concurrent.ExecutionException(new MlKitException("signed URL omitted",102)));
+            Handler.drain();
+            check(!MlKitModels.ready && !MlKitModels.downloading, "failed model remains retryable");
+            check(MlKitModels.status.contains("校验") && MlKitModels.status.contains("102"), "SDK integrity failure must remain identifiable");
+            check(!MlKitModels.status.contains("检查网络") && !MlKitModels.status.contains("signed URL"), "avoid wrong cause or raw SDK details");
+        });
+        test("SDK storage failure is actionable and identifies the missing language", () -> {
+            MlKitModels.download(app, () -> {});
+            sdk.downloads.get(0).fail(new MlKitException("storage failure",101)); sdk.downloads.get(1).succeed(null);
+            Handler.drain();
+            check(MlKitModels.status.contains("空间") && MlKitModels.status.contains("中文") && MlKitModels.status.contains("101"), "space failure identifies code and affected language");
+            check(!MlKitModels.status.contains("检查网络"), "space failure is not a network failure");
         });
         if (failures > 0) throw new AssertionError("MlKitModels: " + failures + " failed cases");
         System.out.println("MlKitModels: " + checks + " assertions passed (SDK callback ordering, download/inventory races, retries)");

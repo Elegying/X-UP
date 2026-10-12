@@ -3,17 +3,18 @@ package io.github.jared.xlowerseek;
 import java.lang.reflect.*;
 import java.util.*;
 
-/** Pinned X 12.31 adapter. Explicit metadata only; copy changed branches, retain unknown entries. */
+/** Explicit promotion metadata only; copy changed branches and retain unknown entries. */
 final class AdTimelineFilter {
     private final Class<?> post,user,imageAd,trend,module,moduleItem;
     private final Field postAd,userAd,trendValue,trendAd,children,wrapped;
     private final Field[] moduleFields;
     private final Field dispensable;
     private final Constructor<?> copyModule,copyItem;
-    AdTimelineFilter(ClassLoader loader)throws Exception {
-        this(Class.forName("com.x.models.timelines.items.j1",false,loader),Class.forName("com.x.models.timelines.items.b2",false,loader),
-            Class.forName("com.x.models.timelines.items.p1",false,loader),Class.forName("com.x.models.timelines.items.y1",false,loader),
-            Class.forName("com.x.models.timelines.items.a1",false,loader),Class.forName("com.x.models.timelines.items.d1",false,loader));
+    AdTimelineFilter(ContentTargets.Ads targets){
+        post=targets.post;user=targets.user;imageAd=targets.imageAd;trend=targets.trend;module=targets.module;moduleItem=targets.moduleItem;
+        postAd=targets.postAd;userAd=targets.userAd;trendValue=targets.trendValue;trendAd=targets.trendAd;
+        children=targets.children;wrapped=targets.wrapped;dispensable=targets.dispensable;
+        moduleFields=targets.moduleFields;copyModule=targets.copyModule;copyItem=targets.copyItem;
     }
     AdTimelineFilter(Class<?> post,Class<?> user,Class<?> imageAd,Class<?> trend,Class<?> module,Class<?> moduleItem)throws Exception {
         this.post=post;this.user=user;this.imageAd=imageAd;this.trend=trend;this.module=module;this.moduleItem=moduleItem;

@@ -20,6 +20,58 @@ public class ModelTransferTest {
   File f=Files.createTempDirectory("model").resolve("model.gguf").toFile();Files.write(new File(f+".part").toPath(),Arrays.copyOf(content,4));Connection c=new Connection(content,200,null);
   ModelTransfer.download(c.getURL(),f,content.length,hash(content),new AtomicBoolean(),(b,v)->{},u->c);assertArrayEquals(content,Files.readAllBytes(f.toPath()));
  }
+ @Test public void shorterValidResumeResponsesContinueUntilWholeModelIsVerified()throws Exception{
+  File f=Files.createTempDirectory("model").resolve("model.gguf").toFile();Files.write(new File(f+".part").toPath(),Arrays.copyOf(content,6));int[] opened={0};
+  Connection first=new Connection(Arrays.copyOfRange(content,6,12),206,"bytes 6-11/"+content.length);
+  Connection second=new Connection(Arrays.copyOfRange(content,12,content.length),206,"bytes 12-"+(content.length-1)+"/"+content.length);
+  ModelTransfer.download(first.getURL(),f,content.length,hash(content),new AtomicBoolean(),(b,v)->{if(v)assertFalse(f.exists());},u->{if(opened[0]++==0)return first;if(opened[0]==2)return second;throw new AssertionError("Unexpected extra range request");});
+  assertEquals("bytes=6-",first.getRequestProperty("Range"));assertEquals("bytes=12-",second.getRequestProperty("Range"));assertEquals(2,opened[0]);assertTrue(first.disconnected&&second.disconnected);assertArrayEquals(content,Files.readAllBytes(f.toPath()));
+ }
+ @Test public void failureAfterFirstSegmentKeepsDownloadedPositionForManualResume()throws Exception{
+  File f=Files.createTempDirectory("model").resolve("model.gguf").toFile();File part=new File(f+".part");Files.write(part.toPath(),Arrays.copyOf(content,6));int[] opened={0};
+  Connection first=new Connection(Arrays.copyOfRange(content,6,12),206,"bytes 6-11/"+content.length);
+  Connection failed=new Connection(new byte[0],503,null);
+  try{ModelTransfer.download(first.getURL(),f,content.length,hash(content),new AtomicBoolean(),(b,v)->{},u->opened[0]++==0?first:failed);fail();}
+  catch(IOException expected){assertTrue(expected.getMessage().contains("503"));assertFalse(expected.getMessage().contains("检查网络"));assertArrayEquals(Arrays.copyOf(content,12),Files.readAllBytes(part.toPath()));assertFalse(f.exists());}
+  Connection resumed=new Connection(Arrays.copyOfRange(content,12,content.length),206,"bytes 12-"+(content.length-1)+"/"+content.length);
+  ModelTransfer.download(resumed.getURL(),f,content.length,hash(content),new AtomicBoolean(),(b,v)->{},u->resumed);assertArrayEquals(content,Files.readAllBytes(f.toPath()));
+ }
+ @Test public void partialRangeCannotClaimMoreBytesThanItsBody()throws Exception{
+  File f=Files.createTempDirectory("model").resolve("model.gguf").toFile();File part=new File(f+".part");byte[] saved=Arrays.copyOf(content,6);Files.write(part.toPath(),saved);
+  Connection c=new Connection(Arrays.copyOfRange(content,6,11),206,"bytes 6-11/"+content.length);
+  try{ModelTransfer.download(c.getURL(),f,content.length,hash(content),new AtomicBoolean(),(b,v)->{},u->c);fail();}catch(IOException expected){assertArrayEquals(saved,Files.readAllBytes(part.toPath()));assertTrue(c.disconnected);assertFalse(f.exists());}
+ }
+ @Test public void tinyRangeFloodStopsWithSavedProgressInsteadOfOpeningUnboundedConnections()throws Exception{
+  byte[] model=new byte[5000];Arrays.fill(model,(byte)42);File f=Files.createTempDirectory("model").resolve("model.gguf").toFile();File part=new File(f+".part");Files.write(part.toPath(),new byte[]{42});int[] opened={0};
+  try{ModelTransfer.download(new URL("https://example.test/model"),f,model.length,hash(model),new AtomicBoolean(),(b,v)->{},u->{
+   if(++opened[0]>2100)throw new AssertionError("Tiny ranges caused more than 2100 sequential requests");long offset=part.length();
+   try{return new Connection(new byte[]{42},206,"bytes "+offset+"-"+offset+"/"+model.length);}catch(Exception e){throw new IOException(e);}
+  });fail();}catch(IOException expected){assertTrue(expected.getMessage().contains("分片"));assertTrue(opened[0]<=2100);assertTrue(part.length()>1&&part.length()<model.length);assertFalse(f.exists());}
+ }
+ @Test public void completePartialNeedsNoNetworkOrAdditionalDownloadSpace()throws Exception{
+  File root=Files.createTempDirectory("model").toFile();File parent=new File(root.toString()){@Override public long getUsableSpace(){return 0;}};
+  File f=new File(root,"model.gguf"){@Override public File getParentFile(){return parent;}};Files.write(new File(f+".part").toPath(),content);
+  ModelTransfer.download(new URL("https://example.test/model"),f,content.length,hash(content),new AtomicBoolean(),(b,v)->{},u->{throw new AssertionError("Complete partial must only verify");});
+  assertArrayEquals(content,Files.readAllBytes(f.toPath()));
+ }
+ @Test public void pausingVerificationKeepsTheCompletePartialForNextAttempt()throws Exception{
+  File f=Files.createTempDirectory("model").resolve("model.gguf").toFile();File part=new File(f+".part");Files.write(part.toPath(),content);AtomicBoolean pause=new AtomicBoolean();
+  try{ModelTransfer.download(new URL("https://example.test/model"),f,content.length,hash(content),pause,(b,v)->{if(v)pause.set(true);},u->{throw new AssertionError("Complete partial must not connect");});fail();}
+  catch(ModelTransfer.Paused expected){assertArrayEquals(content,Files.readAllBytes(part.toPath()));assertFalse(f.exists());}
+  pause.set(false);ModelTransfer.download(new URL("https://example.test/model"),f,content.length,hash(content),pause,(b,v)->{},u->{throw new AssertionError("Resume must verify without connecting");});assertArrayEquals(content,Files.readAllBytes(f.toPath()));
+ }
+ @Test public void missingContentLengthStillRequiresExactResponseSize()throws Exception{
+  for(int extra:new int[]{-1,0,1}){
+   File f=Files.createTempDirectory("model").resolve("model.gguf").toFile();byte[] body=Arrays.copyOf(content,content.length+extra);
+   Connection c=new Connection(body,200,null){public long getContentLengthLong(){return -1;}};
+   try{ModelTransfer.download(c.getURL(),f,content.length,hash(content),new AtomicBoolean(),(b,v)->{},u->c);assertEquals(0,extra);assertArrayEquals(content,Files.readAllBytes(f.toPath()));}
+   catch(IOException expected){assertNotEquals(0,extra);assertFalse(f.exists());}assertTrue(c.disconnected);
+  }
+ }
+ @Test public void server416DoesNotDiscardOrActivatePartialModel()throws Exception{
+  File f=Files.createTempDirectory("model").resolve("model.gguf").toFile();File part=new File(f+".part");byte[] saved=Arrays.copyOf(content,6);Files.write(part.toPath(),saved);Connection c=new Connection(new byte[0],416,"bytes */"+content.length);
+  try{ModelTransfer.download(c.getURL(),f,content.length,hash(content),new AtomicBoolean(),(b,v)->{},u->c);fail();}catch(IOException expected){assertTrue(expected.getMessage().contains("416"));assertArrayEquals(saved,Files.readAllBytes(part.toPath()));assertFalse(f.exists());assertTrue(c.disconnected);}
+ }
  @Test public void tamperAndOversizeNeverBecomeActive()throws Exception{
   File f=Files.createTempDirectory("model").resolve("model.gguf").toFile();byte[] bad=content.clone();bad[0]^=1;Connection c=new Connection(bad,200,null);
   try{ModelTransfer.download(c.getURL(),f,content.length,hash(content),new AtomicBoolean(),(b,v)->{},u->c);fail();}catch(IOException expected){assertFalse(f.exists());}

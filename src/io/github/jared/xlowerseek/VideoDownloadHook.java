@@ -16,6 +16,7 @@ import java.util.*;
 
 final class VideoDownloadHook implements Application.ActivityLifecycleCallbacks {
     private RemoteSettings settings;
+    private VideoTargets targets;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final List<WeakReference<Object>> screens=new ArrayList<>();
     private final Map<Object, Candidate> players = Collections.synchronizedMap(new WeakHashMap<>());
@@ -38,8 +39,10 @@ final class VideoDownloadHook implements Application.ActivityLifecycleCallbacks 
         final String url;
         Candidate(String url) { this.url=url; }
     }
-    static void install(Application app, ClassLoader loader,RemoteSettings settings) throws Exception {
-        VideoDownloadHook hook = new VideoDownloadHook();hook.settings=settings;
+    static void install(Application app, TargetResolver resolver,RemoteSettings settings) throws Exception {
+        VideoTargets targets=new VideoTargets(resolver);
+        ClassLoader loader=resolver.loader;
+        VideoDownloadHook hook = new VideoDownloadHook();hook.settings=settings;hook.targets=targets;
         hook.downloads = new VideoDownloadClient(app, new VideoDownloadClient.Listener() {
             public void changed(boolean busy, int progress, String message) {
                 hook.downloading = busy; hook.downloadProgress = progress; hook.downloadText = message;
@@ -56,7 +59,7 @@ final class VideoDownloadHook implements Application.ActivityLifecycleCallbacks 
                 if (a != null) Toast.makeText(a, message, Toast.LENGTH_LONG).show();
             }
         });
-        hook.progressSync.install(loader);
+        hook.progressSync.install(resolver,targets);
         hook.gestures=new FullScreenGestureHook(new FullScreenGestureHook.Target(){
             public Object player(){return hook.gesturePlayer;}
             public boolean swipeEnabled(){return settings.feature(Feature.SWIPE_SEEK);}
@@ -64,63 +67,36 @@ final class VideoDownloadHook implements Application.ActivityLifecycleCallbacks 
             public void syncProgress(Object player){hook.progressSync.refresh(player);}
             public View surface(){return hook.gestureSurface;}
             public View decor(){Activity a=hook.activity.get();return a==null?null:a.getWindow().getDecorView();}
-        });
+        },targets);
         hook.gestures.install(loader);
-        Class<?> render = Reflect.findClass("com.x.media.playback.u0", loader);
-        Class<?> player = Reflect.findClass("androidx.media3.exoplayer.i0", loader);
-        for (Method m:render.getDeclaredMethods()) if (m.getName().equals("f") && m.getParameterCount()==19) {
-            Hooks.hookMethod(m,new HookCallback() {
-                @Override protected void beforeHookedMethod(HookParam p) {
-                    try {
-                        Object lease=p.args[1];
-                        if (lease==null || p.args[0]==null || p.args[2]==null) return;
-                        if (!lease.getClass().getName().equals("com.x.media.playback.exoplayerpool.h")) return;
-                        Object exo=Reflect.getObjectField(lease,"a");
-                        Object mode=Reflect.getObjectField(p.args[2],"a");
-                        String url=bestMp4(p.args[0]);
-                        if(url!=null) {
-                            Candidate old=hook.players.get(exo);
-                            hook.setCandidate(exo,url);
-                            if(old==null || !old.url.equals(url)) android.util.Log.i("XLowerSeek","video source available");
-                        } else hook.setCandidate(exo,null);
-                    } catch(Throwable e) { android.util.Log.w("XLowerSeek","Video candidate unavailable: "+e.getClass().getSimpleName()); }
-                }
-            });
-        }
-        for (Method m:render.getDeclaredMethods()) if (m.getName().equals("e") && m.getParameterCount()==17) {
-            Hooks.hookMethod(m,new HookCallback() {
-                @Override protected void beforeHookedMethod(HookParam p) {
-                    try {
-                        if(p.args[0]==null || p.args[1]==null || p.args[4]==null)return;
-                        Object scribe=p.args[1];
-                        if(scribe.getClass().getName().equals("com.x.media.playback.j"))scribe=Reflect.getObjectField(scribe,"b");
-                        if(scribe.getClass().getName().equals("com.x.media.playback.scribing.i"))scribe=Reflect.getObjectField(scribe,"a");
-                        Object media=Reflect.getObjectField(scribe,"b");
-                        Object mode=Reflect.getObjectField(p.args[4],"a");
-                        String url=bestMp4(media);
-                        if(url!=null) {
-                            Candidate old=hook.players.get(p.args[0]);
-                            hook.setCandidate(p.args[0],url);
-                            if(old==null || !old.url.equals(url)) android.util.Log.i("XLowerSeek","download candidate mode="+mode+" mp4=true");
-                        } else hook.setCandidate(p.args[0],null);
-                    } catch(Throwable e) { android.util.Log.w("XLowerSeek","Active video unavailable: "+e.getClass().getSimpleName()); }
-                }
-            });
-        }
+        Hooks.hookMethod(targets.renderLease,new HookCallback() {
+            @Override protected void beforeHookedMethod(HookParam p) {
+                Object lease=p.args[1];
+                if(!targets.lease.isInstance(lease))return;
+                Object exo=VideoMembers.read(targets.leasePlayer,lease);
+                hook.setCandidate(exo,targets.bestMp4(p.args[0]));
+            }
+        });
+        Hooks.hookMethod(targets.renderPlayer,new HookCallback() {
+            @Override protected void beforeHookedMethod(HookParam p) {
+                if(p.args[0]!=null)hook.setCandidate(p.args[0],targets.bestMp4(targets.mediaFromScribe(p.args[1])));
+            }
+        });
         HookCallback surfaceHook=new HookCallback() {
             @Override protected void afterHookedMethod(HookParam p) {
+                if(p.hasThrowable())return;
                 if (p.args[0] instanceof View) hook.surfaces.set(p.thisObject,(View)p.args[0]);
                 else hook.surfaces.remove(p.thisObject);
             }
         };
-        Hooks.findAndHookMethod(player,"M",TextureView.class,surfaceHook);
-        Hooks.findAndHookMethod(player,"o",SurfaceView.class,surfaceHook);
-        Hooks.findAndHookMethod(player,"release",new HookCallback() {
+        Hooks.hookMethod(targets.texture,surfaceHook);
+        Hooks.hookMethod(targets.surface,surfaceHook);
+        Hooks.hookMethod(targets.release,new HookCallback() {
             @Override protected void beforeHookedMethod(HookParam p) { if(hook.gesturePlayer==p.thisObject){hook.gestures.reset();hook.gesturePlayer=null;hook.gestureSurface=null;} hook.players.remove(p.thisObject); hook.surfaces.remove(p.thisObject);hook.progressSync.release(p.thisObject); }
         });
-        for(String name:new String[]{"com.x.media.n","com.x.video.tab.b0"}) {
-            Hooks.hookAllConstructors(Reflect.findClass(name,loader),new HookCallback(){
-                @Override protected void afterHookedMethod(HookParam p){WeakReference<Object> ref=new WeakReference<>(p.thisObject);hook.main.post(()->hook.screens.add(ref));}
+        for(Class<?> screen:targets.screens) {
+            Hooks.hookAllConstructors(screen,new HookCallback(){
+                @Override protected void afterHookedMethod(HookParam p){if(p.hasThrowable())return;WeakReference<Object> ref=new WeakReference<>(p.thisObject);hook.main.post(()->hook.screens.add(ref));}
             });
         }
         settings.addListener(()->hook.main.post(()->{hook.gestures.reset();try{hook.update();}catch(RuntimeException ignored){}}));
@@ -130,21 +106,8 @@ final class VideoDownloadHook implements Application.ActivityLifecycleCallbacks 
         Candidate old=players.get(player);
         boolean changed=old!=null&&!Objects.equals(old.url,url);
         if(url==null)players.remove(player);else players.put(player,new Candidate(url));
+        if(url!=null&&(old==null||changed))android.util.Log.i("XLowerSeek","video source available");
         if(changed)main.post(()->{if(gesturePlayer==player){gestures.reset();selected=null;}});
-    }
-    private static String bestMp4(Object media) {
-        if(media==null||Reflect.findMethodExactIfExists(media.getClass(),"e")==null)return null;
-        Object variants=Reflect.callMethod(media,"e");
-        if(!(variants instanceof Iterable)) return null;
-        String best=null; int bitrate=-1;
-        for(Object variant:(Iterable<?>)variants) {
-            String type=(String)Reflect.getObjectField(variant,"c");
-            String url=(String)Reflect.getObjectField(variant,"a");
-            Integer rate=(Integer)Reflect.getObjectField(variant,"b");
-            int value=rate==null?0:rate;
-            if("video/mp4".equals(type) && DownloadPolicy.validUrl(url) && value>bitrate) {best=url;bitrate=value;}
-        }
-        return best;
     }
     private void update() {
         Activity a=activity.get();
@@ -154,9 +117,9 @@ final class VideoDownloadHook implements Application.ActivityLifecycleCallbacks 
         for(Iterator<WeakReference<Object>> it=screens.iterator();it.hasNext();) {
             Object screen=it.next().get();if(screen==null){it.remove();continue;}
             try {
-                Object state=Reflect.callMethod(Reflect.callMethod(screen,"getLifecycle"),"h");
-                if("DESTROYED".equals(state.toString()))it.remove();
-                if("RESUMED".equals(state.toString()))fullScreen=true;
+                String state=targets.state(screen);
+                if("DESTROYED".equals(state))it.remove();
+                if("RESUMED".equals(state))fullScreen=true;
             } catch(Throwable ignored){}
         }
         View decor=a.getWindow().getDecorView();
