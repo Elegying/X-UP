@@ -25,6 +25,16 @@ public final class FullScreenGestureTest {
         return new FullScreenGestureHook(new FullScreenGestureHook.Target() {
             public Object player(){return player;} public View surface(){return root;} public View decor(){return root;}
             public void syncProgress(Object p){} public boolean swipeEnabled(){return true;} public boolean holdEnabled(){return hold;}
+        }, new PlaybackAccess(){
+            public long duration(Object p){return ((Player)p).getDuration();}
+            public long position(Object p){return ((Player)p).getCurrentPosition();}
+            public boolean ad(Object p){return ((Player)p).g();}
+            public boolean playing(Object p){return ((Player)p).isPlaying();}
+            public void seek(Object p,long n){((Player)p).seekTo(n);}
+            public Object speed(Object p){return ((Player)p).d();}
+            public Object doubled(Object speed){return new Speed(2f,((Speed)speed).b);}
+            public void speed(Object p,Object speed){((Player)p).c((Speed)speed);}
+            public float speedValue(Object speed){return ((Speed)speed).a;}
         });
     }
     static boolean event(FullScreenGestureHook hook,View root,int action,float x,float y)throws Exception {

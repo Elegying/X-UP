@@ -10,6 +10,7 @@ import java.lang.reflect.Member;
 final class FullScreenGestureHook {
     interface Target { Object player(); View surface(); View decor(); void syncProgress(Object player); boolean swipeEnabled(); boolean holdEnabled(); }
     private final Target target;
+    private final PlaybackAccess playback;
     private final Handler handler=new Handler(Looper.getMainLooper());
     private Object player, originalSpeed,downSpeed;
     private View decor;
@@ -20,7 +21,7 @@ final class FullScreenGestureHook {
     private boolean dragging,boosting,cancelled,ignoreStream;
     private TextView hint;
     private final Runnable hold=()->boost();
-    FullScreenGestureHook(Target target) {this.target=target;}
+    FullScreenGestureHook(Target target,PlaybackAccess playback) {this.target=target;this.playback=playback;}
     void install(ClassLoader loader) {
         Hooks.findAndHookMethod("com.android.internal.policy.DecorView",loader,"dispatchTouchEvent",MotionEvent.class,new HookCallback(){
             @Override protected void beforeHookedMethod(HookParam p) {
@@ -48,12 +49,12 @@ final class FullScreenGestureHook {
                     ||!GestureArea.contains(root.getWidth(),root.getHeight(),density,localX,localY,
                             insets.left,insets.top,insets.right,insets.bottom)
                     ||localY>r.bottom-32*density)return false;
-            long total=((Number)Reflect.callMethod(active,"getDuration")).longValue();
-            if(total<=0||Boolean.TRUE.equals(Reflect.callMethod(active,"g")))return false;
+            long total=playback.duration(active);
+            if(total<=0||playback.ad(active))return false;
             player=active;decor=root;dispatch=method;down=MotionEvent.obtain(e);
             x=e.getX();y=e.getY();width=root.getWidth();duration=total;
-            start=((Number)Reflect.callMethod(player,"getCurrentPosition")).longValue();
-            downSpeed=target.holdEnabled()?Reflect.callMethod(player,"d"):null;
+            start=playback.position(player);
+            downSpeed=target.holdEnabled()?playback.speed(player):null;
             if(target.holdEnabled())handler.postDelayed(hold,500);return false;
         }
         if(ignoreStream){if(action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_CANCEL)ignoreStream=false;return true;}
@@ -86,18 +87,18 @@ final class FullScreenGestureHook {
     private void seek(float delta,boolean finish){
         long position=SwipePolicy.position(start,duration,delta,width);
         long now=SystemClock.uptimeMillis();
-        if(finish||now-lastSeek>=80){Reflect.callMethod(player,"seekTo",position);target.syncProgress(player);lastSeek=now;}
+        if(finish||now-lastSeek>=80){playback.seek(player,position);target.syncProgress(player);lastSeek=now;}
         show(time(position)+" / "+time(duration));
         if(finish)android.util.Log.i("XLowerSeek","swipeSeek from="+start+" to="+position);
     }
     private void boost(){
         try{
-            if(!target.holdEnabled()||player==null||player!=target.player()||dragging||!Boolean.TRUE.equals(Reflect.callMethod(player,"isPlaying")))return;
+            if(!target.holdEnabled()||player==null||player!=target.player()||dragging||!playback.playing(player))return;
             originalSpeed=downSpeed;
             if(originalSpeed==null)return;
-            Object speed=Reflect.newInstance(originalSpeed.getClass(),2f,Reflect.getFloatField(originalSpeed,"b"));
-            cancelOriginal();Reflect.callMethod(player,"c",speed);boosting=true;
-            android.util.Log.i("XLowerSeek","holdSpeed=2 original="+Reflect.getFloatField(originalSpeed,"a"));
+            Object speed=playback.doubled(originalSpeed);
+            cancelOriginal();playback.speed(player,speed);boosting=true;
+            android.util.Log.i("XLowerSeek","holdSpeed=2 original="+playback.speedValue(originalSpeed));
         }catch(Throwable e){reset();}
     }
     void reset(){
@@ -105,8 +106,8 @@ final class FullScreenGestureHook {
         ignoreStream=ignoreStream||cancelled;
         handler.removeCallbacks(hold);
         if(originalSpeed!=null&&player!=null)try{
-            Reflect.callMethod(player,"c",originalSpeed);
-            android.util.Log.i("XLowerSeek","holdSpeed restored="+Reflect.getFloatField(originalSpeed,"a"));
+            playback.speed(player,originalSpeed);
+            android.util.Log.i("XLowerSeek","holdSpeed restored="+playback.speedValue(originalSpeed));
         }catch(Throwable ignored){}
         if(hint!=null&&hint.getParent() instanceof android.view.ViewGroup)((android.view.ViewGroup)hint.getParent()).removeView(hint);
         hint=null;originalSpeed=null;downSpeed=null;player=null;decor=null;dispatch=null;

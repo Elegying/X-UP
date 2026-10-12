@@ -28,7 +28,8 @@ public final class ContinuationTapHookTest {
     }
     public static void main(String[] args)throws Throwable {
         Tap tap=new Tap();Map<Object,int[]> sizes=new HashMap<>();sizes.put(tap.e,new int[]{1200,2000});AtomicBoolean enabled=new AtomicBoolean(true);
-        HookCallback hook=ContinuationTapHook.callback(enabled::get,sizes,Point.class.getConstructor(long.class));
+        Map<Object,Object> states=new HashMap<>();states.put(tap,tap.e);
+        HookCallback hook=ContinuationTapHook.callback(enabled::get,sizes,states,Point.class.getConstructor(long.class),Point.class.getField("a"));
         for(int seconds:new int[]{5,10})for(float x:new float[]{100,600,1100}){
             Chain c=new Chain(tap,x,1500);c.active=true;c.seconds=seconds;c.total=seconds; // initial native double-tap has already sought once
             for(int n=2;n<=6;n++){
@@ -40,8 +41,8 @@ public final class ContinuationTapHookTest {
         Chain normal=new Chain(tap,600,1500);Hooks.intercept(normal,hook);check(normal.singles==1&&normal.seeks==0);
         for(float x:new float[]{100,600,1100}){Chain c=new Chain(tap,x,100);c.active=true;Hooks.intercept(c,hook);check(c.received==c.original);check(c.direction==(x==100?-1:x==1100?1:0));}
         enabled.set(false);Chain off=new Chain(tap,100,1500);off.active=true;Hooks.intercept(off,hook);check(off.total==-10&&off.received==off.original);enabled.set(true);
-        tap.a=0;Chain other=new Chain(tap,100,1500);Hooks.intercept(other,hook);check(other.received==other.original);tap.a=1;
-        tap.d=null;Chain noCallback=new Chain(tap,100,1500);Hooks.intercept(noCallback,hook);check(noCallback.received==noCallback.original);tap.d=new Object();
+        Tap unrelated=new Tap();Chain other=new Chain(unrelated,100,1500);Hooks.intercept(other,hook);check(other.received==other.original);
+        states.remove(tap);Chain noCallback=new Chain(tap,100,1500);Hooks.intercept(noCallback,hook);check(noCallback.received==noCallback.original);states.put(tap,tap.e);
         sizes.clear();Chain missing=new Chain(tap,100,1500);Hooks.intercept(missing,hook);check(missing.received==missing.original);
         System.out.println("ContinuationTapHook: "+checks+" assertions passed (native burst, 5/10, single tap, overlap, timeout, upper half, disabled, unrelated callback)");
     }
