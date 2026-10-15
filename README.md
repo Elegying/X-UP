@@ -85,7 +85,9 @@ bash test.sh
 
 构建使用 Java 17 字节码级别，与 libxposed API 102 依赖对齐。`test.sh` 包含下载鉴权、任务恢复、取消清理、手势入口、Google 模型状态回调，以及设置保存到翻译任务取消和重连同步的主机回归；JUnit 覆盖模型暂停续传等文件传输边界。Android 与 SDK 替身测试不能代替实机验证。对应 GitHub Actions 配置见 `.github/workflows/android.yml`。
 
-发布构建需要自行提供签名私钥并调整 `signingConfigs`。项目不提供私钥，用户自行构建的 APK 无法覆盖使用另一密钥签名的版本。
+发布构建需要自行提供签名私钥。设置 `SIGNING_KEYSTORE` 后运行 `./build.sh`，脚本会准备原生依赖、构建并校验签名，从 APK 实际版本生成 `build/releases/v<版本>/X-UP-<版本>.apk` 和 SHA-256 清单。密码和别名可通过 `SIGNING_STORE_PASSWORD`、`SIGNING_KEY_ALIAS`、`SIGNING_KEY_PASSWORD` 配置；未设置时保留既有签名配置。设置 `EXPECTED_SIGNER_SHA256` 可以在导出前强制核对证书。
+
+项目不提供私钥，用户自行构建的 APK 无法覆盖使用另一密钥签名的版本。重装系统后的环境恢复、签名备份和覆盖升级要求见 [构建与签名恢复说明](docs/build-recovery.md)。
 
 原生源码固定到 llama.cpp PR 22836 的 `1e411d8f5a1e23525fa3265dfb4bd76265465397`，下载校验后应用项目补丁。权重编号兼容与点积运行时分发补丁见 `native/patches`。不会在构建阶段下载模型。
 
