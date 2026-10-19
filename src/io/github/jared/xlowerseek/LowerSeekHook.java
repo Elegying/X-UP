@@ -32,7 +32,8 @@ final class LowerSeekHook {
         Method compose=resolver.method("video.gesture-composer",MethodMatcher.create()
             .addInvoke(MethodMatcher.create(makeGesture)).returnType(void.class),m->Modifier.isStatic(m.getModifiers()));
         Class<?> layout=resolver.type("video.size-callback",ClassMatcher.create().addInterface(function1.getName())
-            .addMethod(MethodMatcher.create().name("<init>").paramTypes(state,int.class).addCaller(MethodMatcher.create(compose))));
+            .addMethod(MethodMatcher.create().name("<init>").paramCount(2).addCaller(MethodMatcher.create(compose))),
+            type->layoutConstructor(type,state));
         Field layoutState=VideoMembers.field(layout,state);
         Method layoutInvoke=layout.getDeclaredMethod("invoke",Object.class);
         // DpSize has the same string/long shape. Follow the size read by this layout callback.
@@ -72,5 +73,15 @@ final class LowerSeekHook {
                 if(dimensions!=null)p.args[1]=GesturePolicy.lowerForwardOffset((Long)p.args[1],dimensions[0],dimensions[1]);
             }
         });
+    }
+    // R8 uses an int discriminator in earlier APKs and a byte in X 12.35.
+    // The caller relationship and shared gesture state still bind this to the size callback.
+    static boolean layoutConstructor(Class<?> type,Class<?> state) {
+        int matches=0;
+        for(Constructor<?> constructor:type.getDeclaredConstructors()) {
+            Class<?>[] p=constructor.getParameterTypes();
+            if(p.length==2&&p[0]==state&&(p[1]==int.class||p[1]==byte.class))matches++;
+        }
+        return matches==1;
     }
 }

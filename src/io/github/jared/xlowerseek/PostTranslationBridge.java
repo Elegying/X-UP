@@ -17,6 +17,7 @@ final class PostTranslationBridge {
     private final Method scope,startGroup,endGroup,remembered,remember,language,listRender;
     private final Field modelField,scribeField;
     private final Field[] constructorFields;
+    private final int localeIndex,listParameterCount;
     private boolean warned;
 
     private PostTranslationBridge(TargetResolver resolver,RemoteSettings settings)throws Exception {
@@ -32,8 +33,9 @@ final class PostTranslationBridge {
         Class<?> list=listRender.getDeclaringClass();
         modelField=ContentTargets.onlyField(list,nativeParams[1]);
         scribeField=ContentTargets.onlyField(list,listConstructor.getParameterTypes()[2]);
-        constructorFields=new Field[9];
-        for(int i=0;i<9;i++)if(i!=2&&i!=7)constructorFields[i]=i==3?scribeField:ContentTargets.onlyField(list,nativeParams[i]);
+        localeIndex=nativeParams.length-2;listParameterCount=listConstructor.getParameterCount();
+        constructorFields=new Field[nativeParams.length];
+        for(int i=0;i<nativeParams.length;i++)if(i!=2&&i!=localeIndex)constructorFields[i]=i==3?scribeField:ContentTargets.onlyField(list,nativeParams[i]);
         startGroup=NativeTranslationTargets.composerCall(resolver,targets.grokRender,void.class,int.class);
         endGroup=NativeTranslationTargets.composerCall(resolver,targets.grokRender,void.class,boolean.class);
         remembered=NativeTranslationTargets.composerCall(resolver,targets.grokRender,Object.class);
@@ -56,8 +58,7 @@ final class PostTranslationBridge {
         Constructor<?> result=null;
         for(Constructor<?> constructor:type.getDeclaredConstructors()){
             Class<?>[] p=constructor.getParameterTypes();
-            if(p.length==8&&p[0]==nativeParams[0]&&p[1]==nativeParams[1]&&p[2].isAssignableFrom(nativeParams[3])
-                &&p[3]==nativeParams[5]&&p[4]==nativeParams[4]&&p[5]==nativeParams[6]&&p[6]==nativeParams[7]&&p[7]==nativeParams[8]){
+            if(NativeTranslationTargets.listParametersMatch(p,nativeParams)){
                 if(result!=null)return null;result=constructor;
             }
         }
@@ -67,7 +68,7 @@ final class PostTranslationBridge {
         PostTranslationBridge bridge=new PostTranslationBridge(resolver,settings);
         Hooks.hookAllConstructors(bridge.listRender.getDeclaringClass(),new HookCallback(){
             @Override protected void afterHookedMethod(HookParam p){
-                if(!p.hasThrowable()&&p.args.length==8)bridge.locales.put(p.thisObject,p.args[6]);
+                if(!p.hasThrowable()&&p.args.length==bridge.listParameterCount)bridge.locales.put(p.thisObject,p.args[p.args.length-2]);
             }
         });
         Hooks.hookMethod(bridge.listRender,new HookCallback(){
@@ -86,8 +87,8 @@ final class PostTranslationBridge {
             Object coroutineScope=scope.invoke(null,composer);
             Object presenter=remembered.invoke(composer);
             if(!targets.grokRender.getDeclaringClass().isInstance(presenter)){
-                Object[] args=new Object[9];
-                for(int i=0;i<args.length;i++)args[i]=i==2?coroutineScope:i==7?locales.get(owner):constructorFields[i].get(owner);
+                Object[] args=new Object[constructorFields.length];
+                for(int i=0;i<args.length;i++)args[i]=i==2?NativeTranslationTargets.adaptScope(targets.nativeConstructor.getParameterTypes()[2],scope.getReturnType(),coroutineScope):i==localeIndex?locales.get(owner):constructorFields[i].get(owner);
                 presenter=targets.nativeConstructor.newInstance(args);remember.invoke(composer,presenter);
             }
             eligibleModel.set(model);

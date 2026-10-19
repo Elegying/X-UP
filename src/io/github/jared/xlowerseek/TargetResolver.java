@@ -27,7 +27,7 @@ final class TargetResolver implements AutoCloseable {
         loader = context.getClassLoader();
         cache = context.getSharedPreferences("xup_compatibility_targets", Context.MODE_PRIVATE);
         ApplicationInfo app = context.getApplicationInfo();
-        StringBuilder identity = new StringBuilder("3:").append(BuildConfig.VERSION_CODE).append(':').append(version);
+        StringBuilder identity = new StringBuilder("4:").append(BuildConfig.VERSION_CODE).append(':').append(version);
         appendPath(identity, app.sourceDir);
         if (app.splitSourceDirs != null) for (String split : app.splitSourceDirs) appendPath(identity, split);
         String key = identity.toString();
