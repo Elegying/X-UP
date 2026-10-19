@@ -32,13 +32,62 @@ final class CompatibilityStatus {
         result.putInt("module_version", BuildConfig.VERSION_CODE);
         return result;
     }
-    static void publish(Context context, Bundle snapshot) {
-        Thread worker = new Thread(() -> {
-            try (ContentProviderClient provider = context.getContentResolver().acquireUnstableContentProviderClient(Uri.parse("content://" + AUTHORITY))) {
-                if (provider != null) provider.call("report", null, snapshot);
-            } catch (Exception failure) { android.util.Log.w("XLowerSeek", "Compatibility status could not be shared"); }
-        }, "X-UP compatibility status");
-        worker.setDaemon(true); worker.start();
+    private static final long[] REPORT_DELAYS_MS = {0, 1000, 3000, 10000, 30000};
+    interface RetryPause { void sleep(long millis) throws InterruptedException; }
+    static boolean retryReport(java.util.concurrent.Callable<Boolean> attempt, RetryPause pause) {
+        for (long delay : REPORT_DELAYS_MS) {
+            try {
+                if (Thread.currentThread().isInterrupted()) return false;
+                if (delay > 0) pause.sleep(delay);
+                if (Boolean.TRUE.equals(attempt.call())) return true;
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return false;
+            } catch (Exception unavailable) {
+                // Provider startup, binder death and rejected writes can recover on the next attempt.
+            }
+        }
+        return false;
+    }
+    /** One report per X process; retry rounds are driven by foreground events, never a permanent timer. */
+    static final class ReportState {
+        private boolean running, saved;
+        private long nextAllowed;
+        synchronized boolean begin(long now) {
+            if (running || saved || now < nextAllowed) return false;
+            running = true;
+            return true;
+        }
+        synchronized void finish(boolean acknowledged, long now) {
+            saved = acknowledged;
+            running = false;
+            nextAllowed = now + 60_000;
+        }
+    }
+    static Runnable reporter(Context context, Bundle snapshot) {
+        Bundle report = new Bundle(snapshot);
+        ReportState state = new ReportState();
+        return () -> {
+            if (!state.begin(android.os.SystemClock.elapsedRealtime())) return;
+            Thread worker = new Thread(() -> {
+                boolean saved = false;
+                try {
+                    saved = retryReport(() -> {
+                        try (ContentProviderClient provider = context.getContentResolver().acquireUnstableContentProviderClient(Uri.parse("content://" + AUTHORITY))) {
+                            if (provider == null) return false;
+                            Bundle response = provider.call("report", null, report);
+                            return response != null && response.getBoolean("saved", false);
+                        }
+                    }, Thread::sleep);
+                    if (!saved) android.util.Log.w("XLowerSeek", "Compatibility status could not be shared after bounded retries; waiting for foreground retry");
+                } finally {
+                    state.finish(saved, android.os.SystemClock.elapsedRealtime());
+                }
+            }, "X-UP compatibility status");
+            worker.setDaemon(true);
+            try { worker.start(); }
+            catch (RuntimeException failure) { state.finish(false, android.os.SystemClock.elapsedRealtime()); }
+        };
     }
     static boolean save(Context context, Bundle report) {
         if (report == null || report.getInt("module_version", -1) != BuildConfig.VERSION_CODE) return false;

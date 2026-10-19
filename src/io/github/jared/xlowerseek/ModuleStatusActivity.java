@@ -32,10 +32,12 @@ public final class ModuleStatusActivity extends Activity {
                 for(java.util.Map.Entry<String,String> feature:CompatibilityStatus.FEATURES.entrySet())
                     ui.info(compatibility,feature.getValue(),status.getBoolean(feature.getKey(),false)?"已加载":"未加载，请检查适配");
                 ui.info(compatibility,"检测说明","显示最近一次加载结果；具体功能效果以 X 内实际使用为准。未兼容的功能会单独停用。");
-            }else ui.info(compatibility,"等待检测","请完全退出并重新打开 X，再返回查看。更新 X 或 X-UP 后会重新检测。");
+            }else ui.info(compatibility,"等待检测","请先打开 X-UP，再完全退出并重新打开 X。若持续等待，请在系统应用设置中允许 X-UP 自启动，并将省电策略设为“无限制”，然后重试。更新后会重新检测。");
         }
         catch(android.content.pm.PackageManager.NameNotFoundException e){ui.info(card,"X 版本","未安装 X");}
         ui.info(ui.section("启用步骤"),"安装或更新后","在 LSPosed 启用 X-UP 并勾选 X，然后完全退出并重新打开 X。");
+        LinearLayout background=ui.section("HyperOS 后台设置");
+        ui.info(background,"自启动与省电策略","在系统应用设置中找到 X-UP，开启“自启动”（部分版本称“后台自启动”），并将省电策略设为“无限制”。菜单名称可能因系统版本不同而变化。\n\n用于减少本地翻译、视频下载或状态检测被后台限制的情况。设置后先打开一次 X-UP，再返回 X；仍不可用时完全退出并重新打开 X。这些设置不能保证所有系统版本均不再限制后台运行。");
         LinearLayout help=ui.section("使用说明");
         ui.navigation(help,"设置何时生效","",()->ui.details("生效时间","设置修改后自动保存。功能开关实时同步；最新评论会调用 X 的原生排序动作。关闭下载图标不取消正在保存的视频。设置服务连接不代表每个注入功能已成功加载。"));
         ui.navigation(help,"翻译范围与隐私","",()->ui.details("翻译范围与隐私","默认选用 Google ML Kit 本地翻译，也可选择腾讯 HY-MT2 或 OPUS-MT，模型单独下载。覆盖升级保留已保存的引擎选择。X 原生自动翻译为可选联网备用，两者不能同时开启。原生模式覆盖范围由 X 决定。\n\n本地引擎在手机处理帖子、简介、通知和私信等可见文字；不上传到翻译接口。腾讯引擎还可参考已加载的上级回复和引用。输入框、图片不处理；特殊自绘内容可能无法识别。\n\n腾讯约 462 MB，OPUS 约 136 MB；Google 语言包由 SDK 管理。覆盖升级保留模型，进入后台 2 分钟后释放运行内存。日志不记录正文，译文仅在内存缓存；图片和特殊自绘内容不在当前覆盖保证内。"));

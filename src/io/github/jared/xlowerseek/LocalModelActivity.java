@@ -5,7 +5,7 @@ public final class LocalModelActivity extends Activity {
  private final java.util.Map<Feature,Switch> switches=new java.util.EnumMap<>(Feature.class);
  private final java.util.Map<LocalEngine,TextView> engineStates=new java.util.EnumMap<>(LocalEngine.class);
  private ImageView googleBadge;private TextView status,tests,modelInfo,googleDownloadHelp;private ProgressBar progress;private Button download,pause,test,systemDownloads;private RadioGroup engines;
- private final Handler main=new Handler(Looper.getMainLooper());private boolean binding,testing;private String testId;
+ private final Handler main=new Handler(Looper.getMainLooper());private boolean binding,testing;private String testId;private LocalEngine displayedTestEngine;
  private final Runnable refresh=()->{refresh();main.postDelayed(this.refresh,500);};
  public void onCreate(Bundle state){
   super.onCreate(state);SettingsUi ui=new SettingsUi(this,"翻译方式","按手机性能选择，已下载模型会保留",true);
@@ -52,7 +52,7 @@ public final class LocalModelActivity extends Activity {
  }
  private void bindModes(){binding=true;LocalEngine engine=SettingsStore.engine(this);for(java.util.Map.Entry<Feature,Switch> e:switches.entrySet())e.getValue().setChecked(SettingsStore.feature(this,e.getKey()));switches.get(Feature.LOCAL_CONTEXT).setEnabled(SettingsStore.feature(this,Feature.LOCAL_TEXT)&&engine==LocalEngine.TENCENT);engines.check(100+engine.ordinal());binding=false;}
  private void refresh(){
-  bindModes();LocalEngine engine=SettingsStore.engine(this);boolean ready=LocalModels.ready(this,engine),running=ModelDownloadService.running,same=running&&ModelDownloadService.downloadingEngine==engine;
+  bindModes();LocalEngine engine=SettingsStore.engine(this);if(displayedTestEngine!=engine){cancelTest();displayedTestEngine=engine;tests.setText("当前引擎："+engine.title+"\n测试英语、日语译文与实际等待时间。");}boolean ready=LocalModels.ready(this,engine),running=ModelDownloadService.running,same=running&&ModelDownloadService.downloadingEngine==engine;
   long saved=LocalModels.downloadProgress(this,engine),total=engine==LocalEngine.TENCENT?LocalModelSpec.BYTES:engine==LocalEngine.OPUS?OpusFiles.BYTES:0;
   for(LocalEngine e:LocalEngine.values())engineStates.get(e).setText(e.title+" · "+(LocalModels.ready(this,e)?"已下载":"未就绪")+"\n"+e.description);
   googleBadge.setVisibility(engine==LocalEngine.MLKIT?android.view.View.VISIBLE:android.view.View.GONE);test.setText(engine==LocalEngine.MLKIT?"使用 Google Translate 测试英语与日语":"测试英语与日语");
@@ -65,12 +65,12 @@ public final class LocalModelActivity extends Activity {
   download.setEnabled(!running&&!ready);download.setText(ready?"模型已下载，无需重复下载":saved>0?saved==total?"继续校验并安装":"继续下载所选模型":"下载所选模型");pause.setEnabled(same&&engine!=LocalEngine.MLKIT);test.setEnabled(ready&&!testing&&SettingsStore.translate(this)&&SettingsStore.feature(this,Feature.LOCAL_TEXT));
  }
  private void cancelTest(){if(testId!=null){LocalTranslationService.cancel(android.os.Process.myUid(),testId);testId=null;}testing=false;}
- private void test(){testing=true;test.setEnabled(false);tests.setText("正在测试，首次加载可能较慢…");sample(0,new StringBuilder(),SettingsStore.engine(this));}
+ private void test(){LocalEngine engine=SettingsStore.engine(this);displayedTestEngine=engine;testing=true;test.setEnabled(false);tests.setText("正在测试 "+engine.title+"，首次加载可能较慢…");sample(0,new StringBuilder("测试引擎："+engine.title+"\n\n"),engine);}
  private void sample(int index,StringBuilder results,LocalEngine engine){
   if(index==2||isDestroyed()||engine!=SettingsStore.engine(this)){testing=false;testId=null;refresh();return;}
   String[] texts={"The launch made the impossible look routine.","今日は雨なので、傘を忘れないでください。"};String id=java.util.UUID.randomUUID().toString();testId=id;long started=SystemClock.elapsedRealtime();
   LocalTranslationService.request(getApplicationContext(),android.os.Process.myUid(),id,engine.id,LocalModels.revision(this),texts[index],"",new ResultReceiver(main){protected void onReceiveResult(int code,Bundle data){
-   if(isDestroyed()||!id.equals(testId))return;results.append(index==0?"英语：":"日语：").append(code==0&&data!=null?data.getString("text"):"未完成，请检查模型与翻译开关").append("\n等待 ").append(SystemClock.elapsedRealtime()-started).append(" 毫秒\n\n");tests.setText(results.toString());sample(index+1,results,engine);
+   if(isDestroyed()||!id.equals(testId))return;if(engine!=SettingsStore.engine(LocalModelActivity.this)){cancelTest();refresh();return;}results.append(index==0?"英语：":"日语：").append(code==0&&data!=null?data.getString("text"):"未完成，请检查模型与翻译开关").append("\n等待 ").append(SystemClock.elapsedRealtime()-started).append(" 毫秒\n\n");tests.setText(results.toString());sample(index+1,results,engine);
   }});
  }
 }

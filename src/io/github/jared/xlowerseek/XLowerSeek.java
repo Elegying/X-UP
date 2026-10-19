@@ -43,13 +43,14 @@ public final class XLowerSeek extends io.github.libxposed.api.XposedModule {
                         else report("compat local_text unavailable: identity protection unavailable");
                         install(result, "video", () -> VideoDownloadHook.install(app, resolver, settings));
                     }
+                    Runnable publishCompatibility = CompatibilityStatus.reporter(context, result);
                     Hooks.findAndHookMethod(android.app.Activity.class, "onResume", new HookCallback() {
-                        @Override protected void afterHookedMethod(HookParam p) { settings.refresh(); }
+                        @Override protected void afterHookedMethod(HookParam p) { settings.refresh(); publishCompatibility.run(); }
                     });
                     int loaded = 0;
                     for (String key : CompatibilityStatus.FEATURES.keySet()) if (result.getBoolean(key)) loaded++;
                     report("COMPAT X=" + x.getLongVersionCode() + " loaded=" + loaded + "/" + CompatibilityStatus.FEATURES.size());
-                    CompatibilityStatus.publish(context, result);
+                    publishCompatibility.run();
                 } catch (Throwable error) { report("compat initialization unavailable: " + error.getClass().getSimpleName()); }
             }
         });

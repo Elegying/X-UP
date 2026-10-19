@@ -18,14 +18,9 @@ final class AdBlockHook {
         AdImmutableList lists=new AdImmutableList(vector);
         AdPresentation presentation=new AdPresentation(source->{List<?> out=filter.filter((List<?>)source);return out==source?source:lists.copy(out);});
         Class<?> ui=resolver.type("ads.timelineUi",ClassMatcher.create().usingEqStrings(" module=","(entryId=",", sortIndex="));
-        Method render=resolver.method("ads.timelineRender",MethodMatcher.create().declaredClass(ui).returnType(void.class),method->{
-            Class<?>[] p=method.getParameterTypes();int index=p.length-4;
-            return Modifier.isStatic(method.getModifiers())&&p.length>8&&List.class.isAssignableFrom(p[0])
-                &&p[1].isEnum()&&p[2]==boolean.class&&p[3]==boolean.class
-                &&p[index].getName().equals("androidx.compose.runtime.Composer")
-                &&p[index+1]==int.class&&p[index+2]==int.class&&p[index+3]==int.class;
-        });
-        int composer=render.getParameterCount()-4;
+        Method render=resolver.method("ads.timelineRender",MethodMatcher.create().declaredClass(ui).returnType(void.class),
+            method->AdRenderSignature.composerIndex(method)>=0);
+        int composer=AdRenderSignature.composerIndex(render);
         Method mutable=ComposeTargets.mutableState(resolver);
         Object revision=mutable.invoke(null,0);Handler main=new Handler(Looper.getMainLooper());
         boolean[] enabled={settings.feature(Feature.AD_BLOCK)};int[] version={0};

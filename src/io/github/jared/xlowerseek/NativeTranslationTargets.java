@@ -62,15 +62,44 @@ final class NativeTranslationTargets {
         result.setAccessible(true);return result;
     }
 
-    private static Constructor<?> nativeConstructor(Class<?> type,Class<?> coroutineScope){
+    static Constructor<?> nativeConstructor(Class<?> type,Class<?> coroutineScope){
         Constructor<?> result=null;
         for(Constructor<?> constructor:type.getDeclaredConstructors()){
             Class<?>[] p=constructor.getParameterTypes();
-            if(p.length==9&&p[8]==Context.class&&p[2]==coroutineScope){
+            if((p.length==9||p.length==10)&&p[p.length-1]==Context.class&&acceptsScope(p[2],coroutineScope)){
                 if(result!=null)return null;result=constructor;
             }
         }
         return result;
+    }
+    static boolean acceptsScope(Class<?> target,Class<?> scope){
+        if(target==scope)return true;
+        if(!scope.isAssignableFrom(target))return false;
+        try{
+            Class<?> context=scope.getMethod("getCoroutineContext").getReturnType();
+            target.getDeclaredConstructor(context);
+            return true;
+        }catch(NoSuchMethodException ignored){return false;}
+    }
+    static Object adaptScope(Class<?> target,Class<?> scope,Object value)throws ReflectiveOperationException {
+        if(target.isInstance(value))return value;
+        if(!acceptsScope(target,scope))throw new NoSuchMethodException("Unsupported native translation scope");
+        Method context=scope.getMethod("getCoroutineContext");
+        Constructor<?> constructor=target.getDeclaredConstructor(context.getReturnType());
+        constructor.setAccessible(true);
+        // Keep the remembered scope's context (including its Job), so Compose still owns cancellation.
+        return constructor.newInstance(context.invoke(value));
+    }
+    // APK 12.35 adds a scribing dependency before the locale provider and reorders list dependencies.
+    static boolean listParametersMatch(Class<?>[] p,Class<?>[] nativeParams){
+        int[] mapping=nativeParams.length==9?new int[]{0,1,3,5,4,6,7,8}
+            :nativeParams.length==10?new int[]{0,1,3,4,6,5,7,8,9}:null;
+        if(mapping==null||p.length!=mapping.length)return false;
+        for(int i=0;i<p.length;i++){
+            if(i==2){if(!p[i].isAssignableFrom(nativeParams[mapping[i]]))return false;}
+            else if(p[i]!=nativeParams[mapping[i]])return false;
+        }
+        return true;
     }
     private static Object event(TargetResolver resolver,String id,String packageName)throws Exception {
         Class<?> type=resolver.type("translation.request."+id,ClassMatcher.create().usingEqStrings("RequestTranslation"),
