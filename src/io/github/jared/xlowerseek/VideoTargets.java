@@ -65,7 +65,7 @@ final class VideoTargets implements PlaybackAccess {
         variantType=VideoMembers.field(variant,f->f.getType()==String.class&&"video/mp4".equals(VideoMembers.read(f,variantProbe)));
         variantRate=VideoMembers.field(variant,Integer.class);
         screens=new Class<?>[]{
-            resolver.type("video.gallery-screen",ClassMatcher.create().usingEqStrings("x_lite_immersive_media_gallery_chrome_enabled"),VideoTargets::screenContract),
+            galleryScreen(resolver),
             resolver.type("video.immersive-screen",ClassMatcher.create().usingEqStrings("xlite_video_playback_double_tap_like","xlite_video_playback_profile_swipe"),VideoTargets::screenContract)
         };
         screenLifecycle=new Method[]{Reflect.findMethodExact(screens[0],"getLifecycle"),Reflect.findMethodExact(screens[1],"getLifecycle")};
@@ -86,6 +86,13 @@ final class VideoTargets implements PlaybackAccess {
         speed=VideoMembers.field(parameters,f->f.getType()==float.class&&Float.valueOf(2f).equals(VideoMembers.read(f,speedProbe)));
         pitch=VideoMembers.field(parameters,f->f.getType()==float.class&&Float.valueOf(1.125f).equals(VideoMembers.read(f,speedProbe)));
         if(!speedProbe.toString().startsWith("PlaybackParameters(speed=2.00, pitch="))throw new IllegalStateException("Playback speed contract changed");
+    }
+
+    private static Class<?> galleryScreen(TargetResolver resolver) {
+        return resolver.alternatives("video.gallery-screen",VideoTargets::screenContract,
+            ClassMatcher.create().usingEqStrings("x_lite_immersive_media_gallery_chrome_enabled"),
+            ClassMatcher.create().className("com.x.media.",StringMatchType.StartsWith)
+                .usingEqStrings("inline-composer-slot","openPromotedCta","gallery","video_download"));
     }
 
     private static int occurrences(Class<?>[] parameters,Class<?> type) {

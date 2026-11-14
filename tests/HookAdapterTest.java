@@ -26,6 +26,14 @@ public final class HookAdapterTest {
   c=new Chain();Throwable original=new IllegalArgumentException("original");c.failure=original;
   try{Hooks.intercept(c,new HookCallback(){});throw new AssertionError();}catch(IllegalArgumentException e){check(e==original);}check(c.calls==1);
   c=new Chain();c.failure=original;check(Hooks.intercept(c,new HookCallback(){protected void afterHookedMethod(HookParam p){if(p.hasThrowable())p.setResult(8);}}).equals(8));check(c.calls==1);
+  java.util.concurrent.atomic.AtomicInteger faults=new java.util.concurrent.atomic.AtomicInteger(), callbacks=new java.util.concurrent.atomic.AtomicInteger(), reports=new java.util.concurrent.atomic.AtomicInteger();
+  Hooks.observeFailures((feature,error)->{check(feature.equals("probe"));reports.incrementAndGet();});
+  HookCallback broken=new HookCallback(){protected void beforeHookedMethod(HookParam p){callbacks.incrementAndGet();p.args[0]=99;throw new IllegalStateException("broken");}};
+  for(int i=0;i<5;i++){c=new Chain();check(Hooks.intercept(c,broken,"probe",faults).equals(6));check(c.calls==1);}
+  check(callbacks.get()==3);check(reports.get()==3);check(faults.get()==3);
+  c=new Chain();c.failure=original;
+  try{Hooks.intercept(c,broken,"probe",faults);throw new AssertionError();}catch(IllegalArgumentException e){check(e==original);}
+  check(faults.get()==3);Hooks.observeFailures(null);
   System.out.println("HookAdapter: "+checks+" assertions passed");
  }
 }

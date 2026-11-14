@@ -29,6 +29,14 @@ public class AdRenderSignatureTest {
         p=shape(3);p[23]=long.class;assertEquals(-1,match(p));
         p=shape(2);p[22]=Object.class;assertEquals(-1,match(p));
     }
+    @Test public void acceptsLazyPrefixedBoundaryAndChangesOnlyListSlot() {
+        Class<?>[] old=shape(1),p=new Class<?>[old.length+1];
+        p[0]=kotlin.Lazy.class;System.arraycopy(old,0,p,1,old.length);
+        assertEquals(23,match(p));assertEquals(1,AdRenderSignature.listIndex(p));
+        assertEquals((0x12345678&~112)|40,AdRenderSignature.changedFlags(0x12345678,1));
+        assertEquals((0x12345678&~14)|5,AdRenderSignature.changedFlags(0x12345678,0));
+        p[0]=Object.class;assertEquals(-1,match(p));
+    }
     @Test public void preservesListBoundaryConstraints() {
         for(int index=0;index<4;index++) {
             Class<?>[] p=shape(2);p[index]=Object.class;assertEquals(-1,match(p));

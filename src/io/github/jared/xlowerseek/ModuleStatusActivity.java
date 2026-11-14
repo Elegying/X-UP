@@ -27,14 +27,35 @@ public final class ModuleStatusActivity extends Activity {
             ui.info(card,"X 版本",x.versionName+" · 自动检查兼容性");
             android.content.SharedPreferences status=CompatibilityStatus.preferences(this);
             LinearLayout compatibility=ui.section("最近一次 X 启动检测");
-            if(CompatibilityStatus.current(status,x)){
+            if(CompatibilityStatus.current(status,x)&&status.getLong("scan_request",0)>=SettingsStore.compatibilityRevision(this)){
                 ui.info(compatibility,"检测时间",java.text.DateFormat.getDateTimeInstance().format(new java.util.Date(status.getLong("checked",0))));
-                for(java.util.Map.Entry<String,String> feature:CompatibilityStatus.FEATURES.entrySet())
-                    ui.info(compatibility,feature.getValue(),status.getBoolean(feature.getKey(),false)?"已加载":"未加载，请检查适配");
-                ui.info(compatibility,"检测说明","显示最近一次加载结果；具体功能效果以 X 内实际使用为准。未兼容的功能会单独停用。");
-            }else ui.info(compatibility,"等待检测","请先打开 X-UP，再完全退出并重新打开 X。若持续等待，请在系统应用设置中允许 X-UP 自启动，并将省电策略设为“无限制”，然后重试。更新后会重新检测。");
+                int loaded=0;for(String key:CompatibilityStatus.FEATURES.keySet())if(status.getBoolean(key,false)&&!status.getBoolean("runtime."+key,false))loaded++;
+                ui.info(compatibility,"兼容结果",loaded+" / "+CompatibilityStatus.FEATURES.size()+" 项加载正常"+(loaded<CompatibilityStatus.FEATURES.size()?" · 部分功能需要适配":""));
+                for(java.util.Map.Entry<String,String> feature:CompatibilityStatus.FEATURES.entrySet()) {
+                    String key=feature.getKey();
+                    ui.info(compatibility,feature.getValue(),(status.getBoolean("runtime."+key,false)?"运行异常 · ":status.getBoolean(key,false)?"已加载 · ":"未加载 · ")+status.getString("detail."+key,"未提供检测详情"));
+                }
+                ui.info(compatibility,"检测说明","X 更新后会自动丢弃旧缓存。缓存校验失败时，该功能清理缓存并重试一次；存在多个候选时不会猜测。加载结果不代表所有场景的实际效果。连续点按失效不会停用基础双击。");
+            }else ui.info(compatibility,status.contains("x_version")?"X、插件或检测请求已更新":"等待首次检测","请先打开 X-UP，再完全退出并重新打开 X。若持续等待，请在系统应用设置中允许 X-UP 自启动，并将省电策略设为“无限制”，然后重试。更新后会重新检测。");
         }
         catch(android.content.pm.PackageManager.NameNotFoundException e){ui.info(card,"X 版本","未安装 X");}
+        LinearLayout actions=ui.section("兼容恢复");
+        ui.button(actions,"下次启动 X 时完整重新扫描",true).setOnClickListener(v->{
+            if(SettingsStore.requestCompatibilityScan(this)) {
+                ui.details("已请求重新扫描",SettingsStore.isShared()?"请完全退出并重新打开 X。下次启动会绕过全部旧匹配缓存，重新检查各项功能。不会清除 X 数据、模型或设置。":"请求已保存在本机。请先恢复 LSPosed 设置服务连接，再完全退出并重新打开 X。");
+                render();
+            }else ui.details("未保存","请稍后重试。");
+        });
+        ui.navigation(actions,"检查插件更新","结构发生较大变化时，仍需要更新插件。",()->startActivity(new android.content.Intent(this,UpdateActivity.class)));
+        ui.navigation(actions,"复制兼容报告","仅含版本、加载状态及诊断原因，不含帖子与账号。",()->{
+            android.content.SharedPreferences saved=CompatibilityStatus.preferences(this);
+            boolean current=false;
+            try {current=CompatibilityStatus.current(saved,getPackageManager().getPackageInfo("com.twitter.android",0))&&saved.getLong("scan_request",0)>=SettingsStore.compatibilityRevision(this);}catch(android.content.pm.PackageManager.NameNotFoundException ignored){}
+            StringBuilder report=new StringBuilder(current?"当前检测记录\n":"历史检测记录，等待重新检测\n").append("X-UP ").append(BuildConfig.VERSION_NAME).append("\n检测启动时间: ").append(saved.getLong("started",0)).append("\nX code: ").append(saved.getLong("x_version",0)).append("\n");
+            for(java.util.Map.Entry<String,String> feature:CompatibilityStatus.FEATURES.entrySet())report.append(feature.getValue()).append(": ").append(saved.getBoolean("runtime."+feature.getKey(),false)?"运行异常":saved.getBoolean(feature.getKey(),false)?"已加载":"未加载").append(" · ").append(saved.getString("detail."+feature.getKey(),"等待检测")).append('\n');
+            ((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(android.content.ClipData.newPlainText("X-UP 兼容报告",report.toString()));
+            Toast.makeText(this,"兼容报告已复制",Toast.LENGTH_SHORT).show();
+        });
         ui.info(ui.section("启用步骤"),"安装或更新后","在 LSPosed 启用 X-UP 并勾选 X，然后完全退出并重新打开 X。");
         LinearLayout background=ui.section("HyperOS 后台设置");
         ui.info(background,"自启动与省电策略","在系统应用设置中找到 X-UP，开启“自启动”（部分版本称“后台自启动”），并将省电策略设为“无限制”。菜单名称可能因系统版本不同而变化。\n\n用于减少本地翻译、视频下载或状态检测被后台限制的情况。设置后先打开一次 X-UP，再返回 X；仍不可用时完全退出并重新打开 X。这些设置不能保证所有系统版本均不再限制后台运行。");

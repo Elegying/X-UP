@@ -21,6 +21,7 @@ final class AdBlockHook {
         Method render=resolver.method("ads.timelineRender",MethodMatcher.create().declaredClass(ui).returnType(void.class),
             method->AdRenderSignature.composerIndex(method)>=0);
         int composer=AdRenderSignature.composerIndex(render);
+        int list=AdRenderSignature.listIndex(render.getParameterTypes());
         Method mutable=ComposeTargets.mutableState(resolver);
         Object revision=mutable.invoke(null,0);Handler main=new Handler(Looper.getMainLooper());
         boolean[] enabled={settings.feature(Feature.AD_BLOCK)};int[] version={0};
@@ -29,11 +30,11 @@ final class AdBlockHook {
         Hooks.hookMethod(render,new HookCallback(){
             private boolean reported;
             @Override protected void beforeHookedMethod(HookParam p){
-                if(Looper.myLooper()!=Looper.getMainLooper()||!(p.args[0] instanceof List))return;
+                if(Looper.myLooper()!=Looper.getMainLooper()||!(p.args[list] instanceof List))return;
                 try{
                     Reflect.callMethod(revision,"getValue"); // subscribe the active Compose scope to the switch
-                    Object original=p.args[0],result=presentation.render(original,settings.feature(Feature.AD_BLOCK));
-                    if(result!=original){p.args[0]=result;p.args[flags]=(((Integer)p.args[flags])&~14)|5;}
+                    Object original=p.args[list],result=presentation.render(original,settings.feature(Feature.AD_BLOCK));
+                    if(result!=original){p.args[list]=result;p.args[flags]=AdRenderSignature.changedFlags((Integer)p.args[flags],list);}
                 }catch(Exception failure){if(!reported){reported=true;Hooks.log("X-UP: ad adapter unavailable; retaining original timeline");}}
             }
         });

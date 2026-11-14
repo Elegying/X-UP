@@ -5,7 +5,7 @@ TEMP_TEST="$(mktemp -d)"
 trap 'rm -rf "$TEMP_TEST"' EXIT
 SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/Library/Android/sdk}}"
 CP="libs/libxposed-api-102.jar:$SDK/platforms/android-36/android.jar"
-javac -classpath "$CP" -d "$TEMP_TEST" src/io/github/jared/xlowerseek/{SeekStepAdapter,VideoMembers,ContinuationTapHook,GesturePolicy,DownloadPolicy,SwipePolicy,TranslationGate,PostTranslationPolicy,TextTranslationPlan,WeakIdentityMap,Mp4Transfer,DownloadProgress,Hooks,HookCallback,Reflect}.java tests/*.java
+javac -classpath "$CP" -d "$TEMP_TEST" src/io/github/jared/xlowerseek/{SeekStepAdapter,VideoMembers,CompatibilityFailure,ContinuationTapHook,GesturePolicy,DownloadPolicy,SwipePolicy,TranslationGate,PostTranslationPolicy,TextTranslationPlan,WeakIdentityMap,Mp4Transfer,DownloadProgress,Hooks,HookCallback,Reflect}.java tests/*.java
 java -cp "$TEMP_TEST" GesturePolicyTest
 java -cp "$TEMP_TEST" DownloadPolicyTest
 java -cp "$TEMP_TEST" io.github.jared.xlowerseek.SwipePolicyTest

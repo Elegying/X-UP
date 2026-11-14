@@ -11,6 +11,10 @@ import org.luckypray.dexkit.query.matchers.*;
 
 /** Defaults new threads to latest; host selection/state is reused for a live switch. */
 final class ReplySortHook {
+    static boolean repositoryConstructor(Class<?>[] p,Class<?> sort) {
+        return (p.length==6||p.length==7&&p[6]==boolean.class)
+            &&p[2]==long.class&&p[3]==sort;
+    }
     static void install(TargetResolver resolver,RemoteSettings settings)throws Exception {
         Class<?> sort=resolver.type("replies.sort",ClassMatcher.create().usingEqStrings("Recency","Relevance","Likes"),Class::isEnum);
         Object recency=sort.getField("Recency").get(null),relevance=sort.getField("Relevance").get(null);
@@ -24,9 +28,9 @@ final class ReplySortHook {
             method->Modifier.isStatic(method.getModifiers()));
         Class<?> repository=resolver.type("replies.repository",ClassMatcher.create()
             .className("com.x.repositories.post.",StringMatchType.StartsWith)
-            .addMethod(MethodMatcher.create().name("<init>").paramCount(6)),type->{
+            .addMethod(MethodMatcher.create().name("<init>").paramCount(6,7)),type->{
                 for(Constructor<?> c:type.getDeclaredConstructors()){
-                    Class<?>[] p=c.getParameterTypes();if(p.length==6&&p[2]==long.class&&p[3]==sort)return true;
+                    Class<?>[] p=c.getParameterTypes();if(repositoryConstructor(p,sort))return true;
                 }return false;
             });
         Class<?> stateType=ComposeTargets.mutableState(resolver).getReturnType();

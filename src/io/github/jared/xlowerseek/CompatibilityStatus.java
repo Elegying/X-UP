@@ -15,6 +15,7 @@ final class CompatibilityStatus {
     static final Map<String,String> FEATURES = new LinkedHashMap<>();
     static {
         FEATURES.put("lower_seek", "下半区双击快进");
+        FEATURES.put("continuation_seek", "连续点按快进");
         FEATURES.put("seek_step", "快进步长");
         FEATURES.put("ad_block", "推广内容过滤");
         FEATURES.put("reply_sort", "最新评论优先");
@@ -30,6 +31,7 @@ final class CompatibilityStatus {
         result.putLong("x_version", x.getLongVersionCode());
         result.putLong("x_updated", x.lastUpdateTime);
         result.putInt("module_version", BuildConfig.VERSION_CODE);
+        result.putLong("started",System.currentTimeMillis());
         return result;
     }
     private static final long[] REPORT_DELAYS_MS = {0, 1000, 3000, 10000, 30000};
@@ -91,16 +93,31 @@ final class CompatibilityStatus {
     }
     static boolean save(Context context, Bundle report) {
         if (report == null || report.getInt("module_version", -1) != BuildConfig.VERSION_CODE) return false;
+        if(report.getLong("scan_request",0)<SettingsStore.compatibilityRevision(context))return false;
         try {
             PackageInfo x = context.getPackageManager().getPackageInfo("com.twitter.android", 0);
             if (report.getLong("x_version", -1) != x.getLongVersionCode() || report.getLong("x_updated", -1) != x.lastUpdateTime) return false;
+            SharedPreferences previous=preferences(context);
+            if(current(previous,x)&&previous.getLong("scan_request",0)==report.getLong("scan_request",0)
+                    &&older(report.getLong("started",0),report.getLong("report_revision",0),
+                        previous.getLong("started",0),previous.getLong("report_revision",0)))return false;
             SharedPreferences.Editor edit = preferences(context).edit().clear()
                     .putLong("x_version", x.getLongVersionCode()).putLong("x_updated", x.lastUpdateTime)
-                    .putInt("module_version", BuildConfig.VERSION_CODE).putLong("checked", System.currentTimeMillis());
-            for (String key : FEATURES.keySet()) edit.putBoolean(key, report.getBoolean(key, false));
+                    .putInt("module_version", BuildConfig.VERSION_CODE).putLong("scan_request",report.getLong("scan_request",0)).putLong("started",report.getLong("started",0))
+                    .putLong("report_revision",report.getLong("report_revision",0)).putLong("checked", System.currentTimeMillis());
+            for (String key : FEATURES.keySet()) {
+                edit.putBoolean(key,report.getBoolean(key,false));
+                edit.putBoolean("runtime."+key,report.getBoolean("runtime."+key,false));
+                edit.putString("detail."+key,bounded(report.getString("detail."+key,"未提供检测详情")));
+                edit.putInt("hooks."+key,Math.max(0,Math.min(1024,report.getInt("hooks."+key,0))));
+            }
             return edit.commit();
         } catch (Exception failure) { return false; }
     }
+    static boolean older(long incomingStart,long incomingRevision,long savedStart,long savedRevision){
+        return incomingStart<savedStart||incomingStart==savedStart&&incomingRevision<savedRevision;
+    }
+    static String bounded(String value){return value==null?"":value.substring(0,Math.min(value.length(),240));}
     static SharedPreferences preferences(Context context) { return context.getSharedPreferences("compatibility_status", Context.MODE_PRIVATE); }
     static boolean current(SharedPreferences saved, PackageInfo x) {
         return saved.getInt("module_version", -1) == BuildConfig.VERSION_CODE

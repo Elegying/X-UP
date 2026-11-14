@@ -32,6 +32,16 @@ public final class SettingsSyncTest {
             remote.unavailable = false; XposedServiceHelper.bind(service); Handler.drain();
             check(SettingsStore.isShared() && remote.getInt(SettingsStore.SECONDS, 0) == 10 && remote.getBoolean(SettingsStore.TRANSLATE, false), "reconnect replays pending choices");
             check(SettingsStore.engine(app) == LocalEngine.OPUS && !SettingsStore.feature(app, Feature.AD_BLOCK), "reconnect retains independent feature choices");
+            remote.unavailable=true;
+            check(SettingsStore.requestCompatibilityScan(app),"offline rescan request saved");
+            long request=SettingsStore.compatibilityRevision(app);
+            check(request>0&&!SettingsStore.isShared(),"rescan remains local during service failure");
+            check(app.getSharedPreferences("settings_local",0).getBoolean("pending_sync",false),"rescan remains pending");
+            remote.unavailable=false;XposedServiceHelper.bind(service);Handler.drain();
+            check(remote.getLong("compatibility_rescan",0)==request,"reconnect sends pending rescan");
+            check(SettingsStore.requestCompatibilityScan(app),"connected rescan saved");
+            check(remote.getLong("compatibility_rescan",0)>request,"each request invalidates prior scan");
+            check(SettingsStore.seconds(app)==10&&SettingsStore.engine(app)==LocalEngine.OPUS,"rescan preserves settings");
             System.out.println("SettingsSync: " + checks + " assertions passed");
         } finally {
             var field = LocalTranslationService.class.getDeclaredField("worker"); field.setAccessible(true);

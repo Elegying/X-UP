@@ -26,9 +26,9 @@ public final class VideoMembersTest {
         assertEquals("video",VideoMembers.read(field,value));
     }
     @Test public void ambiguousAndMissingMembersAreRejected() {
-        assertThrows(IllegalArgumentException.class,()->VideoMembers.field(Ambiguous.class,long.class));
-        assertThrows(IllegalArgumentException.class,()->VideoMembers.method(Ambiguous.class,long.class));
-        assertThrows(IllegalArgumentException.class,()->VideoMembers.field(Renamed.class,float.class));
-        assertThrows(IllegalArgumentException.class,()->VideoMembers.method(Renamed.class,void.class));
+        assertThrows(CompatibilityFailure.class,()->VideoMembers.field(Ambiguous.class,long.class));
+        assertThrows(CompatibilityFailure.class,()->VideoMembers.method(Ambiguous.class,long.class));
+        assertThrows(CompatibilityFailure.class,()->VideoMembers.field(Renamed.class,float.class));
+        assertThrows(CompatibilityFailure.class,()->VideoMembers.method(Renamed.class,void.class));
     }
 }

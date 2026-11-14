@@ -11,7 +11,7 @@ final class CompatibilitySelection {
         for (T candidate : candidates) {
             if (valid.test(candidate)) { match = candidate; count++; }
         }
-        if (count != 1) throw new IllegalStateException(id + ": compatible targets=" + count);
+        if (count != 1) throw new CompatibilityFailure(id, count);
         return match;
     }
     private CompatibilitySelection() {}
