@@ -8,6 +8,16 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class CompatibilityStatusTest {
+    @Test public void staleSnapshotsCannotOverwriteRuntimeOrNewProcessReports(){
+        assertTrue(CompatibilityStatus.older(10,0,10,1));
+        assertTrue(CompatibilityStatus.older(9,99,10,0));
+        assertFalse(CompatibilityStatus.older(11,0,10,99));
+        assertFalse(CompatibilityStatus.older(10,1,10,1));
+    }
+    @Test public void reportsHaveBoundedDetails(){
+        assertEquals("",CompatibilityStatus.bounded(null));
+        assertEquals(240,CompatibilityStatus.bounded(new String(new char[500])).length());
+    }
     @Test public void acknowledgedReportStopsImmediately() {
         AtomicInteger calls = new AtomicInteger();
         assertTrue(CompatibilityStatus.retryReport(() -> { calls.incrementAndGet(); return true; }, delay -> fail("Unexpected retry")));

@@ -72,7 +72,7 @@ public final class SettingsStore {
     }
     private static boolean copyFeatures(SharedPreferences from,SharedPreferences to){
         int mode=TranslationMode.normalize(from.getInt(TranslationMode.KEY,TranslationMode.LOCAL));
-        SharedPreferences.Editor edit=to.edit().putInt(TranslationMode.KEY,mode).putString(LocalEngine.KEY,LocalEngine.parse(from.getString(LocalEngine.KEY,LocalEngine.DEFAULT.id)).id);for(Feature f:Feature.values())edit.putBoolean(f.key,f==Feature.NATIVE_TRANSLATE||f==Feature.LOCAL_TEXT?TranslationMode.enabled(mode,f):from.getBoolean(f.key,true));return edit.commit();
+        SharedPreferences.Editor edit=to.edit().putLong("compatibility_rescan",from.getLong("compatibility_rescan",0)).putInt(TranslationMode.KEY,mode).putString(LocalEngine.KEY,LocalEngine.parse(from.getString(LocalEngine.KEY,LocalEngine.DEFAULT.id)).id);for(Feature f:Feature.values())edit.putBoolean(f.key,f==Feature.NATIVE_TRANSLATE||f==Feature.LOCAL_TEXT?TranslationMode.enabled(mode,f):from.getBoolean(f.key,true));return edit.commit();
     }
     static synchronized boolean setFeature(Context context,Feature feature,boolean enabled){
         prefs(context);SharedPreferences.Editor edit=local.edit().putBoolean(feature.key,enabled).putBoolean(DIRTY,true);
@@ -86,6 +86,17 @@ public final class SettingsStore {
         if(remote==null)return false;
         try{return remote.edit().putLong("translation_retry",System.currentTimeMillis()).commit();}
         catch(RuntimeException e){remote=null;return false;}
+    }
+    static synchronized long compatibilityRevision(Context context){return prefs(context).getLong("compatibility_rescan",0);}
+    static synchronized boolean requestCompatibilityScan(Context context){
+        prefs(context);
+        long revision=Math.max(System.currentTimeMillis(),local.getLong("compatibility_rescan",0)+1);
+        if(!local.edit().putLong("compatibility_rescan",revision).putBoolean(DIRTY,true).commit())return false;
+        if(remote!=null)try{
+            if(!copyFeatures(local,remote))throw new IllegalStateException("Sync failed");
+            local.edit().putBoolean(DIRTY,false).commit();
+        }catch(RuntimeException unavailable){remote=null;}
+        changed();return true;
     }
     public static synchronized boolean save(Context context,int seconds,boolean latest,boolean translate){
         prefs(context);

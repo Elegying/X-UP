@@ -21,10 +21,10 @@ final class VideoMembers {
             if (Modifier.isStatic(f.getModifiers())) continue;
             f.setAccessible(true);
             if (!matches.test(f)) continue;
-            if (result != null) throw new IllegalArgumentException("Ambiguous video field in " + owner.getName());
+            if (result != null) throw new CompatibilityFailure(owner.getName()+".field",2);
             result = f;
         }
-        if (result == null) throw new IllegalArgumentException("Missing video field in " + owner.getName());
+        if (result == null) throw new CompatibilityFailure(owner.getName()+".field",0);
         result.setAccessible(true);
         return result;
     }
@@ -33,10 +33,10 @@ final class VideoMembers {
         Method result = null;
         for (Method m : owner.getDeclaredMethods()) {
             if (m.isBridge() || !matches.test(m)) continue;
-            if (result != null) throw new IllegalArgumentException("Ambiguous video method in " + owner.getName());
+            if (result != null) throw new CompatibilityFailure(owner.getName()+".method",2);
             result = m;
         }
-        if (result == null) throw new IllegalArgumentException("Missing video method in " + owner.getName());
+        if (result == null) throw new CompatibilityFailure(owner.getName()+".method",0);
         result.setAccessible(true);
         return result;
     }

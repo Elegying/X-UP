@@ -11,18 +11,28 @@ final class AdRenderSignature {
     }
 
     static int composerIndex(int modifiers,Class<?> result,Class<?>[] p) {
-        if(!Modifier.isStatic(modifiers)||result!=void.class||p.length<=8
-            ||!List.class.isAssignableFrom(p[0])||!p[1].isEnum()
-            ||p[2]!=boolean.class||p[3]!=boolean.class)return -1;
-        // X 12.35's list boundary has two changed masks and no default mask;
-        // older releases include a third int. Do not accept arbitrary tails.
-        for(int masks=2;masks<=3;masks++) {
+        int list=listIndex(p);
+        if(!Modifier.isStatic(modifiers)||result!=void.class||list<0)return -1;
+        // The Lazy-prefixed 12.42 boundary has one changed mask after R8 optimization.
+        int minMasks=list==1?1:2;
+        for(int masks=minMasks;masks<=3;masks++) {
             int composer=p.length-masks-1;
-            if(!p[composer].getName().equals("androidx.compose.runtime.Composer"))continue;
+            if(composer<=list+3||!p[composer].getName().equals("androidx.compose.runtime.Composer"))continue;
             boolean valid=true;
             for(int i=composer+1;i<p.length;i++)if(p[i]!=int.class)valid=false;
             if(valid)return composer;
         }
         return -1;
+    }
+
+    static int listIndex(Class<?>[] p) {
+        if(p.length<=8)return -1;
+        int index=p[0].getName().equals("kotlin.Lazy")?1:0;
+        return List.class.isAssignableFrom(p[index])&&p[index+1].isEnum()
+            &&p[index+2]==boolean.class&&p[index+3]==boolean.class?index:-1;
+    }
+    static int changedFlags(int flags,int listIndex) {
+        int shift=3*listIndex;
+        return (flags&~(14<<shift))|(5<<shift);
     }
 }
