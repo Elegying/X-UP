@@ -1,6 +1,6 @@
 # X-UP 构建与签名恢复
 
-适用源码基线：`1.8.0-beta10`，`versionCode=29`。公开代码仓库保存源码、依赖版本和补丁，不保存发布私钥、开发工具、下载模型或构建缓存。
+当前开发基线见 [项目现状与开发交接](project-status.md)。文中的签名恢复演练基于 `1.8.0-beta10`（`versionCode 29`）。公开仓库保存源码、依赖版本和补丁。发布私钥、开发工具、下载模型和构建缓存存放在仓库之外。
 
 ## 从 GitHub 恢复开发与发布环境
 
@@ -30,7 +30,7 @@ gh repo clone Elegying/X-UP-Recovery "$HOME/.xup-recovery/repository"
 
 不能从 APK、公钥证书或 GitHub 账号重新生成原私钥。不要把签名文件、凭据或包含它们的备份上传到公开仓库、Release 或 CI 日志。
 
-当前公开 beta10 的证书 SHA-256：
+以下是已与 beta13 APK 核对的公开发布证书 SHA-256 指纹。
 
 ```text
 3f3e9f2d2b12b19feb8265fb9610cb02a4414a73b9db9a0d1c48ed8c4351734b
@@ -40,7 +40,7 @@ gh repo clone Elegying/X-UP-Recovery "$HOME/.xup-recovery/repository"
 
 ## 安装开发环境
 
-macOS / Linux 需要 Bash、Git、Python 3、JDK 17 或 21，以及 `curl`、`tar`、`patch`、`shasum`。macOS 可先运行 `xcode-select --install` 安装命令行工具；Linux 可安装发行版对应软件包。Windows 可在 WSL2 中按 Linux 流程安装 Linux 版 JDK 与 SDK；该路线未在本次恢复演练中实测。
+macOS / Linux 需要 Bash、Git、Python 3、JDK 17 或 21，以及 `curl`、`tar`、`patch`、`shasum`。CI 使用 JDK 17。macOS 可运行 `xcode-select --install` 安装命令行工具，Linux 可安装发行版对应软件包。Windows 可在 WSL2 中按 Linux 流程安装 Linux 版 JDK 与 SDK，恢复演练尚未验证这条路线。
 
 源码所在目录的完整路径不要包含空格或其他空白字符（包括上级目录）。当前 Android 原生构建工具会错误拆分带空格路径的 `-fmacro-prefix-map` 参数；`build.sh` 会在开始下载或构建之前提示。可使用 `$HOME/Projects/X-UP`，前提是用户目录路径也不含空格。签名文件和备份包可放在含空格的路径中。
 
@@ -71,6 +71,8 @@ javac -version
 
 交互阅读并接受所需 SDK 许可。Gradle 9.1.0 由仓库中的 Wrapper 下载，不必安装系统 Gradle。依赖准备需要能访问 GitHub、Google Maven、Maven Central 和 Gradle 下载服务；恢复包没有包含整个 SDK、NDK、Gradle 缓存或原生依赖源码，不能用于完全离线构建。
 
+环境就绪后，普通开发直接按 [构建与验证](project-status.md#构建与验证) 执行。公开仓库可以运行主机回归、JUnit、Lint 和 Debug 构建。后面的签名恢复步骤用于正式发布和同签名覆盖安装。
+
 ## 恢复源码和签名
 
 通常从 GitHub 克隆：
@@ -99,17 +101,11 @@ export EXPECTED_SIGNER_SHA256="3f3e9f2d2b12b19feb8265fb9610cb02a4414a73b9db9a0d1
 ## 后续覆盖升级与发布
 
 1. 保持包名 `io.github.jared.xlowerseek` 和原签名不变。
-2. 在 `build.gradle` 中提高 `versionCode`，并将 `versionName` 升级到更新器可识别的更高版本；同步 `AndroidManifest.xml` 中的版本声明。例如以 beta10 / 29 为基线，下一版可使用 beta11 / 30。实际发版前先核对 GitHub 是否已有更高版本。
-3. 执行主机回归、JUnit / Lint 和发布构建，并核对证书、包名、版本及 SHA-256：
+2. 发版前核对 GitHub 上的标签和 Release。在 `build.gradle` 中提高 `versionCode`，并将 `versionName` 升级到更新器可识别的更高版本，格式为 `主.次.修订` 或追加 `-alphaN`、`-betaN`、`-rcN`。同步 `AndroidManifest.xml` 中的版本声明。
+3. 执行 [构建与验证](project-status.md#构建与验证) 中的回归，再运行 `./build.sh` 构建发布包。用 `apksigner verify --print-certs` 核对证书，`aapt dump badging` 核对包名和版本，`zipalign -c -P 16 4` 核对 16 KB 对齐，并核对脚本生成的 SHA-256 清单。
 
-   ```sh
-   bash test.sh
-   ./gradlew testDebugUnitTest lintRelease
-   ./build.sh
-   ```
-
-4. 在保留数据的测试设备上进行旧版本覆盖安装验收，重启 X，检查设置与模型保留、LSPosed 加载和关键功能。不要先卸载旧应用，也不要清除应用数据。
-5. 公开发布需要推送经审查的源码和对应 `v<版本>` 标签，在 `Elegying/X-UP` 创建 GitHub Release，并上传精确命名的 `X-UP-<版本>.apk`。例如标签 `v1.8.0-beta11` 对应 `X-UP-1.8.0-beta11.apk`。上传后核对 GitHub 附件的 `digest` 为正确的 `sha256:...`，并核对公开下载文件。测试版标记为 prerelease；用户需开启测试版渠道。
+4. 在已安装旧版的测试设备上直接覆盖安装，保留应用数据。重启 X，检查设置与模型保留、LSPosed 加载和关键功能。
+5. 公开发布需要推送经审查的源码和对应 `v<版本>` 标签，在 `Elegying/X-UP` 创建 GitHub Release，上传命名为 `X-UP-<版本>.apk` 的安装包和 `X-UP-<版本>-SHA256SUMS.txt`。上传后核对 GitHub 的 APK 附件 `digest` 为正确的 `sha256:...`，并核对公开下载文件。模块读取 GitHub 附件字段，清单供人工校验。测试版标记为 prerelease，模块用户需开启测试版渠道。
 
 仅 `git push`、创建标签或构建成功不会自动发布可更新 APK。现有 GitHub Actions 执行测试、Lint 和 Debug 构建，没有签名发布流水线。更新器要求版本高于已安装版本、包名和签名相同、附件名称与版本一致、大小和 SHA-256 正确；同版本重建不构成在线更新。
 

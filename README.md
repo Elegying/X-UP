@@ -2,7 +2,7 @@
 
 面向 X（原 Twitter）的 LSPosed 模块，使用现代 Xposed API 102。当前测试版：1.8.0-beta13。
 
-[项目目标、已定方案、当前进度与下一步](docs/project-status.md)
+[项目现状与开发交接](docs/project-status.md) · [AI 开发入口](AGENTS.md) · [构建与签名恢复](docs/build-recovery.md)
 
 ## 功能
 
