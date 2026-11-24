@@ -10,6 +10,7 @@
 *.keystore
 .DS_Store
 /*.md
+!/AGENTS.md
 !/README.md
 !/CHANGELOG.md
 !/THIRD_PARTY_NOTICES.md
